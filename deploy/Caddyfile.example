@@ -1,0 +1,152 @@
+# =====================================================================
+# Sazcord — пример конфига Caddy (reverse proxy + TLS).
+#
+# Использование:
+#   1. Скопируй в /etc/caddy/Caddyfile и подставь свой домен.
+#   2. caddy validate --config /etc/caddy/Caddyfile
+#   3. systemctl reload caddy
+#
+# Зачем Caddy вместо nginx: сертификаты он получает и продлевает сам,
+# отдельный certbot не нужен, редирект HTTP → HTTPS включён по умолчанию.
+# Конфиг за это платит меньшей гибкостью — если нужна тонкая настройка
+# кеширования и заголовков, бери deploy/nginx.conf.example.
+#
+# WebSocket проксируется без единой строчки настроек: reverse_proxy
+# пробрасывает Upgrade сам. В nginx для этого нужен отдельный location
+# с proxy_set_header Upgrade/Connection.
+#
+# ---------------------------------------------------------------------
+# ЕСЛИ У ТЕБЯ ТОЛЬКО IP, БЕЗ ДОМЕНА — ЧИТАЙ ВНИМАТЕЛЬНО
+# ---------------------------------------------------------------------
+# Автоматика Caddy тут НЕ работает так, как ожидается. Для адреса-IP он
+# не идёт в публичный CA, а выписывает сертификат СВОИМ внутренним CA и
+# пытается прописать его в доверенные на локальной машине.
+#
+# Выглядит рабочим на сервере — и отваливается у всех остальных:
+#   * Android-обёртка отменит загрузку молча (в MainActivity нет
+#     переопределения onReceivedSslError);
+#   * Electron тоже (нет обработчика certificate-error);
+#   * в браузере не зарегистрируется Service Worker, то есть отвалятся
+#     push-уведомления.
+#
+# Поэтому на IP сертификат надо получить самому и скормить Caddy явно
+# через директиву tls (см. второй блок ниже). Условия те же, что и для
+# nginx: публичный статический IP, валидация HTTP-01 или TLS-ALPN-01,
+# короткий срок жизни. Подробности — deploy/DEPLOY.md, «Если домена нет».
+# =====================================================================
+
+# --- Вариант 1: домен (рекомендуемый) --------------------------------
+# Сертификат Caddy получит и будет продлевать сам.
+sazcord.example.com {
+	encode zstd gzip
+
+	# Загрузки до 500 МБ — держим с запасом над MAX_UPLOAD_MB.
+	# Поднял MAX_UPLOAD_MB на сервере — синхронно подними и здесь.
+	request_body {
+		max_size 600MB
+	}
+
+	# --- Заголовки безопасности --------------------------------------
+	# Основной набор ставит helmet в server/src/security.js. Здесь
+	# дублируем критичные: страховка на случай, когда node отдал 502
+	# или упал, а также для статики из /updates.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# Мессенджеру нужны микрофон, камера и захват экрана. Всё
+		# остальное — геолокация, платежи, USB, гироскопы — запрещаем.
+		Permissions-Policy "microphone=(self), camera=(self), display-capture=(self), clipboard-read=(self), clipboard-write=(self), geolocation=(), payment=(), usb=(), gyroscope=(), accelerometer=()"
+
+		# Зеркало CSP из server/src/security.js.
+		#   script-src 'self'            — ни inline, ни eval; production-
+		#                                  бандл Vite обходится без них.
+		#   style-src ... 'unsafe-inline' — Tailwind и motion инлайнят
+		#                                  стили через JS, без этого UI
+		#                                  разваливается.
+		#   connect-src 'self' wss: ws:  — same-origin WebSocket
+		#                                  для socket.io.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' wss: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+
+		# Не сообщать версию сервера.
+		-Server
+	}
+
+	# --- Обновления клиентов -----------------------------------------
+	# Инсталляторы раздаём как статику мимо node: это десятки и сотни
+	# мегабайт, гонять их через приложение незачем. Каталог тот же, что
+	# в UPDATES_DIR (см. deploy/UPDATES.md).
+	#
+	# handle_path срезает префикс: /updates/android/latest.json будет
+	# найден как <root>/android/latest.json.
+	handle_path /updates/* {
+		root * /var/www/sazcord-updates
+		file_server
+
+		# Манифесты кешировать нельзя — иначе клиент будет неделю видеть
+		# старую версию после релиза.
+		@manifests path *.yml *.yaml *.json
+		header @manifests Cache-Control "no-cache, must-revalidate"
+
+		# Бинарники именованы с версией, то есть неизменяемы. Кеш на
+		# сутки экономит трафик при повторных попытках скачать.
+		@installers path *.exe *.blockmap *.apk *.dmg *.zip *.AppImage
+		header @installers Cache-Control "public, max-age=86400, immutable"
+	}
+
+	# --- Всё остальное: API, WebSocket, /uploads, собранный клиент ----
+	# По умолчанию node сам раздаёт client/dist, поэтому отдельный
+	# file_server для фронта не нужен.
+	reverse_proxy 127.0.0.1:3001 {
+		# Длинные загрузки не должны рваться по таймауту чтения.
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+	}
+}
+
+# --- Вариант 2: голый IP ---------------------------------------------
+# Раскомментируй и убери блок выше, если домена нет.
+#
+# Директива tls с путями ОБЯЗАТЕЛЬНА. Без неё Caddy подставит сертификат
+# своего внутреннего CA, и все клиенты, кроме этой машины, получат
+# «Сервер недоступен».
+#
+# 203.0.113.7 {
+# 	tls /etc/ssl/sazcord/fullchain.pem /etc/ssl/sazcord/privkey.pem
+#
+# 	encode zstd gzip
+# 	request_body {
+# 		max_size 600MB
+# 	}
+#
+# 	# Заголовки — те же, что в блоке с доменом, кроме HSTS: привязывать
+# 	# его к IP смысла нет, а при смене адреса он только мешает.
+# 	header {
+# 		X-Content-Type-Options "nosniff"
+# 		X-Frame-Options "DENY"
+# 		Referrer-Policy "strict-origin-when-cross-origin"
+# 		Permissions-Policy "microphone=(self), camera=(self), display-capture=(self), clipboard-read=(self), clipboard-write=(self), geolocation=(), payment=(), usb=(), gyroscope=(), accelerometer=()"
+# 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' wss: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+# 		-Server
+# 	}
+#
+# 	handle_path /updates/* {
+# 		root * /var/www/sazcord-updates
+# 		file_server
+# 		@manifests path *.yml *.yaml *.json
+# 		header @manifests Cache-Control "no-cache, must-revalidate"
+# 		@installers path *.exe *.blockmap *.apk *.dmg *.zip *.AppImage
+# 		header @installers Cache-Control "public, max-age=86400, immutable"
+# 	}
+#
+# 	reverse_proxy 127.0.0.1:3001 {
+# 		transport http {
+# 			read_timeout 3600s
+# 			write_timeout 3600s
+# 		}
+# 	}
+# }

@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Sazcord" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/sazcord_bg</item>
+        <item name="android:statusBarColor">@color/sazcord_bg</item>
+        <item name="android:navigationBarColor">@color/sazcord_bg</item>
+    </style>
+</resources>

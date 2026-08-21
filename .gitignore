@@ -1,0 +1,59 @@
+# Зависимости и сборка
+node_modules/
+dist/
+build/
+.gradle/
+*.tsbuildinfo
+
+# Переменные окружения и секреты
+.env*
+!.env.example
+!*.env.example
+*.env
+!*.env.example
+keystore.env
+
+# Хранилище данных, база и загрузки
+data/
+uploads/
+updates/
+*.sqlite*
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+vapid.json
+
+# Локальные конфиги
+sazcord.config.json
+local.properties
+
+# SSL-сертификаты и закрытые ключи
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+*.jks
+*.keystore
+
+# Логи и дампы
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Тесты и покрытие
+coverage/
+.nyc_output/
+
+# IDE и системные артефакты
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+

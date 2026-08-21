@@ -1,0 +1,404 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  /* Safe-area для iPhone (notch/Dynamic Island/home indicator) и Android
+     gesture-bar в standalone-режиме. Кладём на #root, чтобы фон body
+     закрывал всю площадь экрана (включая под notch'ем). */
+  #root {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    box-sizing: border-box;
+  }
+
+  /* Кастомный титлбар Electron (см. components/TitleBar.tsx) занимает
+     32px сверху, position:fixed. Чтобы реальный контент не уходил под
+     него, добавляем эквивалентный padding к #root в десктопе. Класс
+     ставится из main.tsx до первого рендера, чтобы не было прыжка. */
+  body.is-desktop #root {
+    padding-top: calc(env(safe-area-inset-top) + 32px);
+  }
+
+  body {
+    @apply bg-bg-0 text-slate-100 font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    background:
+      radial-gradient(circle at 18% 12%, rgb(124 108 255 / 0.16), transparent 34rem),
+      radial-gradient(circle at 86% 8%, rgb(34 197 94 / 0.08), transparent 26rem),
+      linear-gradient(135deg, #08090d 0%, #070a1a 48%, #0f1118 100%);
+    /* В standalone-PWA отключаем pull-to-refresh, чтобы юзер случайно
+       не перезагрузил чат свайпом сверху. */
+    overscroll-behavior-y: contain;
+    /* Убираем стандартный синий highlight на iOS Safari при тапах. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #1b2350, #131a3c);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #25306b, #1a2250);
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium
+           transition duration-150 ease-out disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+  .btn-primary {
+    @apply btn text-white;
+    background: linear-gradient(135deg, #5566ff, #7c94ff);
+    box-shadow: 0 14px 28px -18px rgb(124 108 255 / 0.9);
+  }
+  .btn-ghost {
+    @apply btn bg-transparent hover:bg-white/5 text-slate-200;
+  }
+  .btn-danger {
+    @apply btn bg-danger hover:bg-danger-hover text-white;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center rounded-full w-10 h-10 transition duration-150 ease-out select-none;
+  }
+  .btn:hover:not(:disabled),
+  .btn-icon:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+  .btn:active:not(:disabled),
+  .btn-icon:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #4453f5, #6b83ff);
+    box-shadow: 0 18px 32px -18px rgb(124 108 255 / 1);
+  }
+
+  .input {
+    @apply w-full rounded-lg bg-bg-2/80 border border-border px-3 py-2 text-sm
+           outline-none focus:border-accent focus:ring-2 focus:ring-accent/30
+           placeholder:text-slate-500 transition duration-150 ease-out;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
+  }
+  /* select-варианту нельзя позволять focus-ring "выпадать" за родителя
+     с overflow: hidden — заменим на border + ring внутрь. */
+  select.input {
+    @apply pr-9 cursor-pointer appearance-none bg-no-repeat;
+    /* стрелка-шеврон, серая, справа */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-position: right 12px center;
+    background-size: 12px 12px;
+  }
+  select.input:hover {
+    @apply border-accent/60;
+  }
+  select.input:focus {
+    @apply border-accent;
+    box-shadow: inset 0 0 0 1px rgb(124 108 255 / 0.6);
+  }
+  select.input option {
+    @apply bg-bg-2 text-slate-100;
+  }
+
+  .card {
+    @apply rounded-xl bg-bg-1/90 border border-white/10 shadow-soft;
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035), rgb(255 255 255 / 0));
+  }
+
+  .list-row {
+    @apply relative flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition duration-150 ease-out overflow-hidden;
+  }
+  .list-row::before {
+    content: '';
+    position: absolute;
+    inset: 8px auto 8px 0;
+    width: 3px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #5566ff, #22c55e);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+  }
+  .list-row-active {
+    background: rgb(255 255 255 / 0.07);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  }
+  .list-row-active::before {
+    opacity: 1;
+  }
+  .list-row:not(.list-row-active):hover {
+    @apply bg-white/5;
+    transform: translateX(2px);
+  }
+
+  .avatar {
+    @apply inline-flex items-center justify-center rounded-full font-semibold text-white select-none;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 10px 22px -14px rgb(0 0 0 / 0.9);
+  }
+
+  .app-shell {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(circle at 50% -10%, rgb(124 108 255 / 0.12), transparent 34rem),
+      linear-gradient(135deg, rgb(8 9 13 / 0.98), rgb(11 12 16 / 0.98));
+  }
+  .app-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 16% 18%, rgb(124 108 255 / 0.14), transparent 22rem),
+      radial-gradient(circle at 88% 76%, rgb(34 197 94 / 0.07), transparent 24rem);
+    animation: sazcord-aurora 18s ease-in-out infinite alternate;
+  }
+  .surface-panel {
+    @apply bg-bg-1/80 backdrop-blur-xl;
+    box-shadow:
+      inset -1px 0 0 rgb(255 255 255 / 0.045),
+      18px 0 48px -44px rgb(0 0 0 / 0.95);
+  }
+  .chat-header {
+    @apply bg-bg-1/75 backdrop-blur-xl;
+    box-shadow:
+      inset 0 -1px 0 rgb(255 255 255 / 0.05),
+      0 10px 34px -34px rgb(0 0 0 / 0.95);
+  }
+  .chat-scroll {
+    background:
+      radial-gradient(circle at 50% 0%, rgb(124 108 255 / 0.06), transparent 22rem),
+      linear-gradient(180deg, rgb(255 255 255 / 0.012), transparent 18rem);
+  }
+  .composer-panel {
+    @apply bg-bg-1/80 backdrop-blur-xl;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 -18px 42px -38px rgb(0 0 0 / 0.95);
+  }
+  .interactive-scale {
+    @apply transition duration-150 ease-out;
+  }
+  .interactive-scale:hover {
+    transform: translateY(-1px);
+  }
+  .interactive-scale:active {
+    transform: translateY(0) scale(0.98);
+  }
+  .status-dot {
+    box-shadow:
+      0 0 0 2px #0d1128,
+      0 0 16px rgb(34 197 94 / 0.6);
+  }
+  .message-row {
+    animation: sazcord-message-in 0.18s ease-out both;
+  }
+  .message-bubble {
+    @apply border transition duration-150 ease-out;
+    box-shadow: 0 10px 28px -24px rgb(0 0 0 / 0.95);
+  }
+  .message-bubble:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 34px -26px rgb(0 0 0 / 1);
+  }
+  .message-bubble-mine {
+    @apply border-white/10 text-white;
+    background: linear-gradient(135deg, #5566ff, #7c94ff);
+  }
+  .message-bubble-other {
+    @apply bg-bg-2/90 border-white/5 text-slate-100;
+  }
+  .message-bubble-deleted {
+    @apply bg-bg-2/70 border-white/5 text-slate-500 italic;
+  }
+  /* Подсветка после скролла к оригиналу из reply-цитаты. Добавляется JS-кодом
+     в MessageList.scrollToMessage() и снимается через 1.4с. Ring накладываем
+     на сам message-row, чтобы он окружал и аватарку, и бабл. */
+  .message-flash .message-bubble {
+    animation: sazcord-flash 1.4s ease-out both;
+  }
+  @keyframes sazcord-flash {
+    0% {
+      box-shadow:
+        0 0 0 0 rgb(124 108 255 / 0.0),
+        0 0 0 4px rgb(124 108 255 / 0.0);
+    }
+    20% {
+      box-shadow:
+        0 0 24px 6px rgb(124 108 255 / 0.5),
+        0 0 0 3px rgb(124 108 255 / 0.6);
+    }
+    100% {
+      box-shadow:
+        0 0 0 0 rgb(124 108 255 / 0.0),
+        0 0 0 0 rgb(124 108 255 / 0.0);
+    }
+  }
+  /* Reply-цитата сверху бабла: компактный hover-эффект, чтобы было ясно
+     что это интерактивный элемент (клик прыгает к оригиналу). */
+  .reply-quote {
+    transition: background-color 0.12s ease-out;
+  }
+  .reaction-chip {
+    @apply transition duration-150 ease-out;
+  }
+  .reaction-chip:hover {
+    transform: translateY(-1px) scale(1.03);
+  }
+  .media-card {
+    @apply border border-white/10 shadow-soft transition duration-150 ease-out;
+  }
+  .media-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 42px -28px rgb(0 0 0 / 1);
+  }
+  .auth-shell {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 50% 18%, rgb(124 108 255 / 0.22), transparent 30rem),
+      radial-gradient(circle at 82% 78%, rgb(34 197 94 / 0.1), transparent 24rem);
+  }
+  .auth-card {
+    animation: sazcord-pop-in 0.26s ease-out both;
+    backdrop-filter: blur(18px);
+  }
+  .brand-glow {
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.08),
+      0 18px 38px -22px rgb(124 108 255 / 1);
+  }
+
+  /* Кастомный диапазон-ползунок: тёмный трек, заливка до thumb, круглый thumb. */
+  .range {
+    @apply w-full h-2 rounded-full appearance-none cursor-pointer outline-none;
+    background: linear-gradient(
+      to right,
+      #5566ff 0%,
+      #5566ff var(--range-progress, 0%),
+      #1d2447 var(--range-progress, 0%),
+      #1d2447 100%
+    );
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #fff;
+    border: 2px solid #5566ff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #fff;
+    border: 2px solid #5566ff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+  }
+  .range::-moz-range-track {
+    height: 8px;
+    border-radius: 9999px;
+    background: #1d2447;
+  }
+  .range::-moz-range-progress {
+    height: 8px;
+    border-radius: 9999px;
+    background: #5566ff;
+  }
+  .range:focus-visible {
+    box-shadow: 0 0 0 3px rgb(124 108 255 / 0.25);
+  }
+}
+
+@keyframes sazcord-aurora {
+  0% {
+    opacity: 0.7;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(1.5%, -1%, 0) scale(1.03);
+  }
+}
+
+@keyframes sazcord-message-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sazcord-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .range::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-spin {
+    animation: none;
+  }
+  .btn,
+  .btn-icon,
+  .btn-primary,
+  .btn-ghost,
+  .btn-danger,
+  .list-row,
+  .range::-webkit-slider-thumb,
+  .interactive-scale,
+  .message-bubble,
+  .reaction-chip,
+  .media-card {
+    transition: none;
+  }
+  .app-shell::before,
+  .message-row,
+  .auth-card {
+    animation: none;
+  }
+}

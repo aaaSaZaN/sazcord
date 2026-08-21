@@ -1,0 +1,235 @@
+# =====================================================================
+# Sazcord — пример конфига nginx (reverse proxy + TLS).
+#
+# Использование:
+#   1. Скопируй в /etc/nginx/sites-available/sazcord и подкорректируй
+#      server_name и путь к сертификатам.
+#   2. ln -s /etc/nginx/sites-available/sazcord /etc/nginx/sites-enabled/
+#   3. nginx -t && systemctl reload nginx
+#
+# Сертификаты удобно получить через certbot:
+#   sudo apt install certbot python3-certbot-nginx
+#   sudo certbot --nginx -d sazcord.example.com
+#
+# WebRTC голос/видео работают P2P (через STUN/TURN), nginx их не проксирует —
+# он отвечает только за HTTP API + WebSocket для сигналинга/чата.
+#
+# ---------------------------------------------------------------------
+# ЕСЛИ У ТЕБЯ ТОЛЬКО IP, БЕЗ ДОМЕНА
+# ---------------------------------------------------------------------
+# Сам nginx с этим справляется: подставь IP в server_name и укажи пути к
+# сертификату. Вся сложность — получить сертификат, а не настроить прокси.
+#
+#   server_name 203.0.113.7;
+#   ssl_certificate     /etc/ssl/sazcord/fullchain.pem;
+#   ssl_certificate_key /etc/ssl/sazcord/privkey.pem;
+#
+# Условия, которые придётся выполнить:
+#
+#   * IP должен быть ПУБЛИЧНЫМ и статическим. На 192.168.*, 10.*,
+#     172.16–31.* публично доверенный сертификат не выпустит ни один CA —
+#     это запрещено Baseline Requirements CA/Browser Forum.
+#   * Валидация только HTTP-01 или TLS-ALPN-01. DNS-01 для голого IP
+#     неприменим: доменного имени, чьи TXT-записи можно подписать, нет.
+#     Порт 80 или 443 на этом IP должен быть доступен из интернета.
+#   * Срок жизни у IP-сертификатов короткий (порядка недели), продлевать
+#     надо соответственно чаще. Автопродление обязано быть под
+#     мониторингом.
+#
+# Самоподписанный сертификат тут НЕ вариант. Android-обёртка не даёт
+# пользователю «продолжить всё равно»: в MainActivity нет переопределения
+# onReceivedSslError, WebView просто отменяет загрузку. У Electron нет
+# обработчика certificate-error. Клиент увидит «Сервер недоступен» без
+# объяснений. Подробнее — deploy/DEPLOY.md, раздел «Если домена нет».
+# =====================================================================
+
+# --- Редирект HTTP → HTTPS ------------------------------------------
+server {
+  listen 80;
+  listen [::]:80;
+  server_name sazcord.example.com;
+
+  # ACME challenge оставляем отдельно (если используешь webroot mode).
+  location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+
+  location / {
+    return 301 https://$host$request_uri;
+  }
+}
+
+# --- HTTPS ----------------------------------------------------------
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name sazcord.example.com;
+
+  ssl_certificate     /etc/letsencrypt/live/sazcord.example.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/sazcord.example.com/privkey.pem;
+  ssl_protocols       TLSv1.2 TLSv1.3;
+  ssl_ciphers         HIGH:!aNULL:!MD5;
+  ssl_session_cache   shared:SSL:10m;
+
+  # Загрузки до 500 МБ — поднимаем под лимит сервера (см. MAX_UPLOAD_MB).
+  # Если поднял MAX_UPLOAD_MB на сервере — синхронно подними и тут.
+  client_max_body_size 600m;
+
+  # Чтобы аплоады голосовых/файлов не отваливались по таймауту.
+  proxy_read_timeout  3600s;
+  proxy_send_timeout  3600s;
+  send_timeout        3600s;
+
+  # =================================================================
+  # --- Security headers (defense-in-depth) -------------------------
+  # =================================================================
+  # Helmet (server/src/security.js) ставит основной набор заголовков
+  # для всех ответов от node. Здесь дублируем критичные на уровне
+  # nginx — это страховка на случай если node отдал 502, упал, или
+  # nginx раздаёт статику напрямую (не проксируя в node). Если
+  # помечать одинаковые заголовки в двух местах — браузер логически
+  # AND'ит их, побеждает более строгий вариант.
+  #
+  # ВАЖНО про nginx-наследование add_header: если внутри location
+  # есть СВОЙ add_header — он ПЕРЕБИВАЕТ все add_header родителя,
+  # а не дополняет. В блоках /uploads/ и /updates/ ниже нужно
+  # повторить только реально полезные для статики (X-Content-Type-
+  # Options, Cache-Control). CSP, X-Frame и т.п. на бинарных файлах
+  # никакой пользы не дают.
+
+  # HSTS: форсируем HTTPS на год + поддомены. Если у тебя есть
+  # HTTP-only поддомен (cdn., legacy. и т.п.) — убери includeSubDomains.
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+  # Permissions-Policy: что разрешено вызывать через браузерные API.
+  # Helmet этот заголовок НЕ ставит. Для мессенджера нужны микро/
+  # камера/screen-share/clipboard, всё остальное (геолокация, USB,
+  # payment, гироскопы) явно запрещаем.
+  add_header Permissions-Policy "microphone=(self), camera=(self), display-capture=(self), clipboard-read=(self), clipboard-write=(self), geolocation=(), payment=(), usb=(), gyroscope=(), accelerometer=()" always;
+
+  # X-Frame-Options: DENY — нельзя загружать Sazcord в iframe (защита
+  # от clickjacking). Дублирует CSP frame-ancestors, но нужен для
+  # старых браузеров без CSP.
+  add_header X-Frame-Options "DENY" always;
+
+  # Referrer-Policy: при переходе по ссылке не отдавать полный URL
+  # внешнему сайту. strict-origin-when-cross-origin = same-origin
+  # видит всё, чужие сайты — только origin без пути и query.
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+  # X-Content-Type-Options: запрет MIME-sniffing'а. helmet ставит
+  # это сам, дублируем.
+  add_header X-Content-Type-Options "nosniff" always;
+
+  # Content-Security-Policy: что страница может загружать/выполнять.
+  # Зеркало helmet'овского CSP (см. server/src/security.js).
+  #   - script-src 'self' — никаких inline-script'ов и eval.
+  #     Vite-production-bundle уже без них.
+  #   - style-src 'self' 'unsafe-inline' — Tailwind/motion инлайнят
+  #     стили через JS; без 'unsafe-inline' UI развалится.
+  #   - img-src/media-src 'self' data: blob: — аватары, голосовые,
+  #     записываемые локально превью.
+  #   - connect-src 'self' wss: ws: — same-origin WebSocket для
+  #     socket.io. ws: оставлен для случая reverse-proxy без TLS
+  #     внутри LAN.
+  #   - worker-src 'self' blob: — service worker для push.
+  #   - object-src 'none', frame-ancestors 'none' — никаких
+  #     <object>/<embed>/iframe.
+  #   - upgrade-insecure-requests — авто-апгрейд http://… → https://…
+  #     внутри страницы.
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' wss: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" always;
+
+  # Вариант А: nginx отдаёт фронт сам (быстрее, кешируется).
+  # Если фронт собирается в client/dist и доступен по /var/www/sazcord/dist,
+  # раскомментируй блок ниже и закомментируй `proxy_pass` ниже для location /.
+  #
+  # root /var/www/sazcord/dist;
+  # location / {
+  #   try_files $uri $uri/ /index.html;
+  # }
+  # location /assets/ {
+  #   expires 7d;
+  #   add_header Cache-Control "public, max-age=604800, immutable";
+  # }
+
+  # Вариант B (по-умолчанию): node-сервер сам отдаёт собранный фронт.
+  # Это самый простой путь — ничего не надо синхронизировать вручную.
+
+  # --- Socket.IO (WebSocket) -----------------------------------------
+  location /socket.io/ {
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://127.0.0.1:3001;
+
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+  }
+
+  # --- Авто-обновление десктоп-клиента ------------------------------
+  # latest.yml + Sazcord Setup *.exe + *.blockmap раздаются как статика.
+  # electron-updater на стороне клиента качает их напрямую через nginx,
+  # минуя node — это разгружает app-сервер от 80MB-блобов.
+  # Папка на диске (по умолчанию /var/www/sazcord-updates) должна быть
+  # доступна на запись юзеру, который делает релизы (см. deploy/UPDATES.md).
+  location /updates/ {
+    alias /var/www/sazcord-updates/;
+    autoindex off;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    # Вложенные location'ы наследуют alias родителя, так что повторять
+    # его не нужно — nginx сам подставит /var/www/sazcord-updates/<file>.
+
+    # latest.yml НЕ кешируем — иначе клиенты будут «видеть» старую
+    # версию ещё долго после релиза.
+    location ~* \.ya?ml$ {
+      add_header Cache-Control "no-cache, must-revalidate" always;
+      add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # .exe и .blockmap immutable по версии (имя файла содержит версию),
+    # их можно кешировать на день — экономит трафик при retry'ах.
+    location ~* \.(exe|blockmap)$ {
+      expires 1d;
+      add_header Cache-Control "public, max-age=86400, immutable" always;
+      add_header X-Content-Type-Options "nosniff" always;
+    }
+  }
+
+  # --- Загрузки/раздача файлов (стримим, не буферизуем) -------------
+  # Для больших файлов (видео, голосовые до 500 МБ) важно отключить
+  # буферизацию: иначе nginx складывает запрос на диск/в RAM целиком,
+  # прежде чем начать передавать его в node, что съедает IOPS и
+  # задерживает старт ответа клиенту.
+  location /uploads/ {
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://127.0.0.1:3001;
+
+    proxy_buffering off;
+    proxy_request_buffering off;
+    # nosniff на статике — страховка от XSS, если magic-bytes sniffing
+    # на сервере по какой-то причине пропустит подделку MIME.
+    add_header X-Content-Type-Options "nosniff" always;
+  }
+
+  # --- API + статика клиента (вариант B) ----------------------------
+  location / {
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://127.0.0.1:3001;
+  }
+
+  # gzip уже включён глобально в большинстве дистрибутивов; если нет —
+  # раскомментируй:
+  # gzip on;
+  # gzip_types text/plain text/css application/javascript application/json;
+}

@@ -1,0 +1,10 @@
+node_modules/
+**/dist/
+**/build/
+**/.vite/
+*.min.js
+package-lock.json
+desktop/dist/
+desktop/assets/
+client/public/sw.js
+.git/

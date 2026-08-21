@@ -1,0 +1,131 @@
+{
+  "name": "@sazcord/desktop",
+  "version": "0.10.1",
+  "private": true,
+  "description": "Sazcord desktop shell (Electron). Loads the Sazcord web client into a native window and adds OS-level features (global keybinds, tray, autostart).",
+  "main": "main.js",
+  "license": "AGPL-3.0-or-later",
+  "author": "Sazcord",
+  "homepage": "https://github.com/aaaSaZaN/sazcord",
+  "scripts": {
+    "start": "electron .",
+    "start:url": "cross-env SAZCORD_SERVER_URL=http://localhost:3000 electron .",
+    "build:icon": "node scripts/build-icon.js",
+    "prebuild": "node scripts/build-icon.js",
+    "prebuild:win": "node scripts/build-icon.js",
+    "prebuild:win:portable": "node scripts/build-icon.js",
+    "prebuild:win:nsis": "node scripts/build-icon.js",
+    "prebuild:mac": "node scripts/build-icon.js",
+    "prebuild:linux": "node scripts/build-icon.js",
+    "build": "electron-builder --publish=never",
+    "build:win": "electron-builder --win dir --publish=never",
+    "build:win:portable": "electron-builder --win portable --publish=never",
+    "build:win:nsis": "electron-builder --win nsis --publish=never",
+    "build:mac": "electron-builder --mac --publish=never",
+    "build:linux": "electron-builder --linux --publish=never",
+    "release:win": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
+  },
+  "devDependencies": {
+    "cross-env": "7.0.3",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.34.5"
+  },
+  "build": {
+    "appId": "com.sazcord.desktop",
+    "productName": "Sazcord",
+    "electronVersion": "42.0.1",
+    "directories": {
+      "output": "dist"
+    },
+    "npmRebuild": false,
+    "files": [
+      "main.js",
+      "preload.js",
+      "config.js",
+      "shortcuts.js",
+      "mouseHook.js",
+      "autoUpdater.js",
+      "processAudio.js",
+      "screenPicker/**/*",
+      "assets/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/uiohook-napi/**",
+      "**/node_modules/application-loopback/bin/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico",
+      "publish": [
+        {
+          "provider": "generic",
+          "url": "https://updates.invalid/windows/",
+          "channel": "latest"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sazcord",
+      "menuCategory": false,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "include": "installer/installer.nsh"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.social-networking",
+      "icon": "assets/icon.png",
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.inherit.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Sazcord needs access to your microphone for voice calls and voice messages.",
+        "NSCameraUsageDescription": "Sazcord needs access to your camera for video calls."
+      },
+      "publish": [
+        {
+          "provider": "generic",
+          "url": "https://updates.invalid/mac/",
+          "channel": "latest"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "tar.gz"
+      ],
+      "maintainer": "Sazcord",
+      "category": "Network",
+      "icon": "assets/icon.png",
+      "publish": [
+        {
+          "provider": "generic",
+          "url": "https://updates.invalid/linux/",
+          "channel": "latest"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "application-loopback": "^1.2.7",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3",
+    "uiohook-napi": "^1.5.5"
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Цвет адресной строки — единый для светлой и тёмной (бренд тёмный). -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070a1a" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#070a1a" />
+
+    <!-- iOS standalone (Add to Home Screen без адресной строки). -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Sazcord" />
+
+    <!-- Иконки. SVG для современных движков, PNG-fallback для iOS. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-icon-180.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <title>Sazcord</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

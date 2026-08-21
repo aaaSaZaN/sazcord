@@ -1,0 +1,5 @@
+# Install as /etc/sudoers.d/sazcord-deploy (root:root, mode 0440).
+# Allows the gitlab-runner CI user to invoke the deploy script without password.
+
+gitlab-runner ALL=(root) NOPASSWD: /usr/local/bin/sazcord-deploy.sh
+Defaults!/usr/local/bin/sazcord-deploy.sh !requiretty

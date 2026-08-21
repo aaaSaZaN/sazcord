@@ -1,0 +1,52 @@
+{
+  "name": "sazcord",
+  "version": "0.10.1",
+  "private": true,
+  "description": "Self-hosted minimal messenger with voice/video calls and screen sharing",
+  "license": "AGPL-3.0-or-later",
+  "author": "Sazcord",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aaaSaZaN/sazcord.git"
+  },
+  "homepage": "https://github.com/aaaSaZaN/sazcord#readme",
+  "bugs": {
+    "url": "https://github.com/aaaSaZaN/sazcord/issues"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "workspaces": [
+    "server",
+    "client",
+    "desktop"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm --workspace server install && npm --workspace client install && npm --workspace desktop install",
+    "dev": "npm-run-all --parallel dev:server dev:client",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm --workspace client run build",
+    "start": "npm --workspace server start",
+    "desktop": "npm --workspace desktop run start",
+    "desktop:dev": "cross-env SAZCORD_SERVER_URL=http://localhost:5173 npm --workspace desktop run start",
+    "desktop:build": "npm --workspace desktop run build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "deploy:trigger": "powershell -ExecutionPolicy Bypass -File scripts/trigger-pipeline.ps1",
+    "migrate:friends": "npm --workspace server run migrate:friends --"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.8.3",
+    "typescript-eslint": "^8.59.2"
+  }
+}

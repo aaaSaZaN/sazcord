@@ -1,0 +1,55 @@
+# =====================================================================
+# systemd unit для Sazcord. Установка:
+#
+#   sudo cp deploy/sazcord.service /etc/systemd/system/sazcord.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now sazcord
+#   sudo systemctl status sazcord
+#
+# Логи:  journalctl -u sazcord -f
+# Рестарт после правки .env: sudo systemctl restart sazcord
+#
+# Перед первым запуском поправь:
+#   - WorkingDirectory  — куда склонен репозиторий
+#   - User / Group      — от какого юзера запускать (создай отдельного, например `sazcord`)
+# =====================================================================
+
+[Unit]
+Description=Sazcord self-hosted messenger
+After=network.target
+
+[Service]
+Type=simple
+User=sazcord
+Group=sazcord
+WorkingDirectory=/opt/sazcord
+Environment=NODE_ENV=production
+# Дефис = «нет файла, не беда»: без него сервис вообще не стартует, пока
+# .env не создан, а .env намеренно не лежит в репозитории.
+# Внимание: systemd парсит файл сам, а не через dotenv — многострочных
+# значений и inline-комментариев после значения он не понимает.
+EnvironmentFile=-/opt/sazcord/server/.env
+ExecStart=/usr/bin/node server/src/index.js
+Restart=always
+RestartSec=3
+
+# Безопасность: не давать сервису доступ к чему попало.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# ProtectSystem=strict делает всю ФС read-only, кроме перечисленного здесь.
+# server/ — база (server/data) и вложения (server/uploads); updates/ — каталог
+# установщиков, куда сервер при старте делает mkdir.
+#
+# ВАЖНО: если в .env заданы SAZCORD_DB_FILE / UPLOADS_DIR / UPDATES_DIR,
+# указывающие наружу — допиши эти пути сюда, иначе запись упадёт с EROFS.
+# Дефис перед путём — чтобы юнит стартовал, даже если каталога ещё нет
+# (без него systemd падает на настройке mount namespace).
+ReadWritePaths=/opt/sazcord/server -/opt/sazcord/updates
+
+# Базовые лимиты ресурсов (опционально, для маленького VPS).
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

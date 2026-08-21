@@ -1,0 +1,40 @@
+[Unit]
+Description=Sazcord self-hosted messenger
+After=network.target
+
+# Пути здесь зашиты под /apps/prod/Sazcord. Если меняешь каталог через
+# SAZCORD_TARGET_DIR в sazcord-deploy.sh — поправь WorkingDirectory,
+# EnvironmentFile и ReadWritePaths тем же значением, иначе деплой поедет
+# в один каталог, а сервис продолжит стартовать из другого.
+[Service]
+Type=simple
+User=sazcord
+Group=sazcord
+WorkingDirectory=/apps/prod/Sazcord
+Environment=NODE_ENV=production
+# Дефис — чтобы отсутствие .env не мешало сервису стартовать (файл исключён
+# из rsync и на свежем хосте его ещё нет). systemd читает файл сам, не через
+# dotenv: inline-комментарии после значения и многострочные значения не поймёт.
+EnvironmentFile=-/apps/prod/Sazcord/server/.env
+ExecStart=/usr/bin/node server/src/index.js
+ExecStartPost=/usr/local/bin/sazcord-notify.sh start
+ExecStopPost=/bin/sh -c '[ "$SERVICE_RESULT" = "success" ] && /usr/local/bin/sazcord-notify.sh stop || /usr/local/bin/sazcord-notify.sh fail'
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# ProtectSystem=strict = вся ФС read-only, кроме перечисленного. updates/ —
+# каталог установщиков для автообновления, сервер делает туда mkdir на старте.
+# Если SAZCORD_DB_FILE / UPLOADS_DIR / UPDATES_DIR уводят данные наружу —
+# добавь эти пути сюда, иначе запись упадёт с EROFS.
+# Дефис перед путём — чтобы юнит стартовал, даже если каталога ещё нет
+# (без него systemd падает на настройке mount namespace).
+ReadWritePaths=/apps/prod/Sazcord/server -/apps/prod/Sazcord/updates
+
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+# =====================================================================
+# coturn рядом с Sazcord.
+#
+# Использование:
+#   1. cp .env.example .env и задай REALM, TURN_PASSWORD, EXTERNAL_IP.
+#      EXTERNAL_IP — публичный IP сервера (без него relay не работает).
+#   2. docker compose up -d
+#   3. В server/.env приложения пропиши:
+#        TURN_URL=turn:turn.example.com:3478
+#        TURN_USERNAME=sazcord
+#        TURN_PASSWORD=<то же, что в .env здесь>
+#      И перезапусти sazcord.
+#
+# Порты:
+#   3478/udp+tcp — STUN/TURN listener
+#   49152-65535/udp — media relay (обязательно открыть на firewall!)
+#
+# Логи: docker compose logs -f
+# =====================================================================
+
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: sazcord-coturn
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      # Если у тебя есть TLS-сертификаты (например, шариш с nginx через certbot) —
+      # монтируй сюда и укажи пути в turnserver.conf (см. cert=/pkey=).
+      # - /etc/letsencrypt:/etc/letsencrypt:ro
+    environment:
+      # coturn читает turnserver.conf; эти переменные просто чтобы удобно
+      # подставить их при первой установке (см. generate.sh).
+      REALM: ${REALM:-sazcord.example.com}
+      TURN_USERNAME: ${TURN_USERNAME:-sazcord}
+      TURN_PASSWORD: ${TURN_PASSWORD:-CHANGE_ME}
+      EXTERNAL_IP: ${EXTERNAL_IP:-127.0.0.1}

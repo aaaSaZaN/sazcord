@@ -1,0 +1,7 @@
+<resources>
+    <!-- Тот же фон, что и у десктопного окна (backgroundColor в main.js),
+         чтобы при старте не мигало белым. -->
+    <color name="sazcord_bg">#070a1a</color>
+    <!-- Фоновый слой adaptive-иконки: синий из логотипа. -->
+    <color name="ic_launcher_background">#1418d6</color>
+</resources>

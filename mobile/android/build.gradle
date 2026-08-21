@@ -1,0 +1,5 @@
+// Корневой build-скрипт. Версии плагинов держим здесь, чтобы app/build.gradle
+// оставался про само приложение.
+plugins {
+    id "com.android.application" version "8.7.3" apply false
+}
