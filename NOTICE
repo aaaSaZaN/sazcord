@@ -16,10 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 Source code: https://github.com/aaaSaZaN/sazcord
 
-----------------------------------------------------------------------
-Portions of this software are based on OwnCord:
-Copyright (c) 2026 Restezzz (https://github.com/Restezzz/OwnCord)
-Licensed under the MIT License:
+--------------------------------------------------------------------
+Origin and third-party notices
+--------------------------------------------------------------------
+
+Sazcord is derived from OwnCord (https://github.com/Restezzz/OwnCord),
+a self-hosted messenger developed between 2026-04-26 and 2026-08-21 by
+Restez, aaaSaZaN, Vasilii, Kirill Startsev, Nikita and Llyesviel.
+
+OwnCord is distributed under the MIT License. The MIT License permits
+sublicensing, so the combined work is released under the GNU AGPL v3 as
+stated above; the MIT notice below is retained because the license
+requires it, and its terms continue to apply to the portions of this
+work that originate in OwnCord.
+
+MIT License
+
+Copyright (c) 2026 Restez
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -36,5 +49,4 @@ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR OTHER DEALINGS IN THE SOFTWARE.
