@@ -23,6 +23,7 @@ import { canShareScreen } from '../utils/media';
 import { useSettings } from '../context/SettingsContext';
 import { getAvatarUrl, getDisplayName } from '../utils/user';
 import { applySinkId } from '../utils/audioSink';
+import CallPingBadge from './CallPingBadge';
 
 const SettingsPanel = lazy(() => import('./SettingsPanel'));
 
@@ -471,13 +472,16 @@ export default function GroupCallView({
             );
           })}
 
-        <div className="absolute top-4 left-4 flex items-center gap-2">
+        <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
           <div className="px-3 py-1.5 text-xs rounded-full bg-black/60 backdrop-blur border border-white/10 flex items-center gap-1.5">
             <UsersIcon size={14} />
             <span>
               {group?.name || 'Группа'} · {peopleLabel}
             </span>
           </div>
+          {call.stats && state === 'in-call' && (
+            <CallPingBadge stats={call.stats} />
+          )}
           {pinnedKey && (
             <button
               onClick={() => setPinnedKey(null)}

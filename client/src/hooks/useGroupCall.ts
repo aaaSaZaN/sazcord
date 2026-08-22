@@ -16,6 +16,7 @@ import {
 import { onShortcutEvent, isDesktop } from '../utils/desktop';
 import { startRtcDiag, buildRtcConfig } from '../utils/rtcDiag';
 import { useSpeakingDetector } from './useSpeakingDetector';
+import type { CallStats } from '../components/CallPingBadge';
 
 /**
  * useGroupCall — активный групповой звонок (mesh WebRTC).
@@ -1525,6 +1526,109 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
     };
   }, [state]);
 
+  const [stats, setStats] = useState<CallStats>({
+    ping: null,
+    packetLoss: 0,
+    quality: 'unknown',
+    bitrateInKbps: null,
+    bitrateOutKbps: null,
+    codec: null,
+    protocol: null,
+  });
+
+  useEffect(() => {
+    if (state !== 'in-call' && state !== 'joining') {
+      setStats({
+        ping: null,
+        packetLoss: 0,
+        quality: 'unknown',
+        bitrateInKbps: null,
+        bitrateOutKbps: null,
+        codec: null,
+        protocol: null,
+      });
+      return undefined;
+    }
+
+    let lastBytesIn = 0;
+    let lastBytesOut = 0;
+    let lastTime = Date.now();
+
+    const sample = async () => {
+      const pcs = Array.from(pcsRef.current.values());
+      if (pcs.length === 0) return;
+      try {
+        let minPing: number | null = null;
+        let totalLost = 0;
+        let totalPackets = 0;
+        let totalBytesIn = 0;
+        let totalBytesOut = 0;
+        let proto: string | null = null;
+        let codecName: string | null = null;
+
+        for (const pc of pcs) {
+          if (pc.connectionState === 'closed') continue;
+          const report = await pc.getStats();
+          report.forEach((stat: any) => {
+            if (stat.type === 'candidate-pair' && (stat.nominated || stat.state === 'succeeded' || stat.selected)) {
+              if (typeof stat.currentRoundTripTime === 'number') {
+                const rtt = Math.round(stat.currentRoundTripTime * 1000);
+                if (minPing === null || rtt < minPing) minPing = rtt;
+              }
+            }
+            if (stat.type === 'inbound-rtp' && stat.kind === 'audio') {
+              if (typeof stat.packetsLost === 'number') totalLost += stat.packetsLost;
+              if (typeof stat.packetsReceived === 'number') totalPackets += stat.packetsReceived + Math.max(0, stat.packetsLost);
+              if (typeof stat.bytesReceived === 'number') totalBytesIn += stat.bytesReceived;
+              if (stat.codecId) {
+                const c = report.get(stat.codecId);
+                if (c && c.mimeType) codecName = c.mimeType.replace('audio/', '');
+              }
+            }
+            if (stat.type === 'outbound-rtp' && typeof stat.bytesSent === 'number') {
+              totalBytesOut += stat.bytesSent;
+            }
+            if (stat.type === 'local-candidate' && stat.candidateType) {
+              proto = stat.candidateType;
+            }
+          });
+        }
+
+        const now = Date.now();
+        const durationSec = Math.max(0.1, (now - lastTime) / 1000);
+        const bitrateIn = lastBytesIn > 0 ? Math.round(((totalBytesIn - lastBytesIn) * 8) / durationSec / 1000) : null;
+        const bitrateOut = lastBytesOut > 0 ? Math.round(((totalBytesOut - lastBytesOut) * 8) / durationSec / 1000) : null;
+        lastBytesIn = totalBytesIn;
+        lastBytesOut = totalBytesOut;
+        lastTime = now;
+
+        const lossPercent = totalPackets > 0 ? Math.round((Math.max(0, totalLost) / totalPackets) * 100) : 0;
+        let quality: 'good' | 'fair' | 'poor' | 'unknown' = 'unknown';
+        if (minPing !== null) {
+          if (minPing < 100 && lossPercent < 2) quality = 'good';
+          else if (minPing < 250 && lossPercent < 6) quality = 'fair';
+          else quality = 'poor';
+        }
+
+        setStats({
+          ping: minPing,
+          packetLoss: lossPercent,
+          quality,
+          bitrateInKbps: bitrateIn,
+          bitrateOutKbps: bitrateOut,
+          codec: codecName || 'opus',
+          protocol: proto,
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const interval = setInterval(sample, 1500);
+    sample();
+    return () => clearInterval(interval);
+  }, [state]);
+
   return {
     state,
     group,
@@ -1539,6 +1643,7 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
     sharingScreen,
     withVideo,
     speakingUserIds,
+    stats,
     join,
     leave,
     toggleMute,

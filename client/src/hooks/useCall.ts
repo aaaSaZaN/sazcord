@@ -16,6 +16,7 @@ import {
 } from '../utils/audioProcessing';
 import { onShortcutEvent, isDesktop } from '../utils/desktop';
 import { startRtcDiag, buildRtcConfig } from '../utils/rtcDiag';
+import type { CallStats } from '../components/CallPingBadge';
 
 /**
  * useCall — один активный звонок между двумя пользователями.
@@ -1605,6 +1606,105 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
     enabled: state === 'in-call',
   });
 
+  const [stats, setStats] = useState<CallStats>({
+    ping: null,
+    packetLoss: 0,
+    quality: 'unknown',
+    bitrateInKbps: null,
+    bitrateOutKbps: null,
+    codec: null,
+    protocol: null,
+  });
+
+  useEffect(() => {
+    if (state !== 'in-call' && state !== 'connecting') {
+      setStats({
+        ping: null,
+        packetLoss: 0,
+        quality: 'unknown',
+        bitrateInKbps: null,
+        bitrateOutKbps: null,
+        codec: null,
+        protocol: null,
+      });
+      return undefined;
+    }
+
+    let lastBytesIn = 0;
+    let lastBytesOut = 0;
+    let lastTime = Date.now();
+
+    const sample = async () => {
+      const pc = pcRef.current;
+      if (!pc || pc.connectionState === 'closed') return;
+      try {
+        const report = await pc.getStats();
+        let pingMs: number | null = null;
+        let lostPackets = 0;
+        let totalPackets = 0;
+        let totalBytesIn = 0;
+        let totalBytesOut = 0;
+        let proto: string | null = null;
+        let codecName: string | null = null;
+
+        report.forEach((stat: any) => {
+          if (stat.type === 'candidate-pair' && (stat.nominated || stat.state === 'succeeded' || stat.selected)) {
+            if (typeof stat.currentRoundTripTime === 'number') {
+              pingMs = Math.round(stat.currentRoundTripTime * 1000);
+            }
+          }
+          if (stat.type === 'inbound-rtp' && stat.kind === 'audio') {
+            if (typeof stat.packetsLost === 'number') lostPackets = stat.packetsLost;
+            if (typeof stat.packetsReceived === 'number') totalPackets = stat.packetsReceived + Math.max(0, lostPackets);
+            if (typeof stat.bytesReceived === 'number') totalBytesIn += stat.bytesReceived;
+            if (stat.codecId) {
+              const c = report.get(stat.codecId);
+              if (c && c.mimeType) codecName = c.mimeType.replace('audio/', '');
+            }
+          }
+          if (stat.type === 'outbound-rtp' && typeof stat.bytesSent === 'number') {
+            totalBytesOut += stat.bytesSent;
+          }
+          if (stat.type === 'local-candidate' && stat.candidateType) {
+            proto = stat.candidateType;
+          }
+        });
+
+        const now = Date.now();
+        const durationSec = Math.max(0.1, (now - lastTime) / 1000);
+        const bitrateIn = lastBytesIn > 0 ? Math.round(((totalBytesIn - lastBytesIn) * 8) / durationSec / 1000) : null;
+        const bitrateOut = lastBytesOut > 0 ? Math.round(((totalBytesOut - lastBytesOut) * 8) / durationSec / 1000) : null;
+        lastBytesIn = totalBytesIn;
+        lastBytesOut = totalBytesOut;
+        lastTime = now;
+
+        const lossPercent = totalPackets > 0 ? Math.round((Math.max(0, lostPackets) / totalPackets) * 100) : 0;
+        let quality: 'good' | 'fair' | 'poor' | 'unknown' = 'unknown';
+        if (pingMs !== null) {
+          if (pingMs < 100 && lossPercent < 2) quality = 'good';
+          else if (pingMs < 250 && lossPercent < 6) quality = 'fair';
+          else quality = 'poor';
+        }
+
+        setStats({
+          ping: pingMs,
+          packetLoss: lossPercent,
+          quality,
+          bitrateInKbps: bitrateIn,
+          bitrateOutKbps: bitrateOut,
+          codec: codecName || 'opus',
+          protocol: proto,
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const interval = setInterval(sample, 1500);
+    sample();
+    return () => clearInterval(interval);
+  }, [state]);
+
   // --- beforeunload: корректно уведомляем пира --------------------------
   useEffect(() => {
     const onBeforeUnload = () => {
@@ -1696,6 +1796,7 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
     waitingUntil,
     selfLeft,
     speakingUserIds,
+    stats,
     selfId: selfUser.id,
     start,
     accept,

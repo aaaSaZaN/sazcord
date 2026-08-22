@@ -501,34 +501,59 @@ export default function ChatPanel({
     else stopTyping();
   };
 
-  const handleDrop = (e) => {
+  const dragCounterRef = useRef(0);
+
+  useEffect(() => {
+    const prevent = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
+
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer?.types?.includes('Files')) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files).filter(
-      (f: File) => f.type.startsWith('image/') || f.type.startsWith('video/'),
-    );
+    const files = Array.from(e.dataTransfer?.files || []);
     for (const file of files) {
       addPendingAttachment(file);
     }
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handlePaste = (e) => {
-    const items = Array.from(e.clipboardData.items || []) as DataTransferItem[];
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData?.items || []);
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
+      if (item.kind === 'file') {
         const file = item.getAsFile();
         if (file) {
           addPendingAttachment(file);
@@ -590,13 +615,23 @@ export default function ChatPanel({
   return (
     <div
       ref={rootRef}
-      className={`flex flex-col h-full bg-bg-0/20 ${isDragging ? 'ring-2 ring-accent ring-inset' : ''} ${
+      className={`relative flex flex-col h-full bg-bg-0/20 ${isDragging ? 'ring-2 ring-accent ring-inset' : ''} ${
         resizing ? 'select-none' : ''
       }`}
       onDrop={handleDrop}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
+      {isDragging && (
+        <div className="absolute inset-0 z-40 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 border-2 border-dashed border-accent rounded-2xl m-2 pointer-events-none transition-all">
+          <div className="w-16 h-16 rounded-2xl bg-accent/20 border border-accent/40 text-accent flex items-center justify-center mb-3 shadow-lg shadow-accent/20">
+            <Upload size={32} />
+          </div>
+          <div className="text-lg font-semibold text-white">Перетащите файлы сюда</div>
+          <div className="text-sm text-slate-400 mt-1">Документы, изображения, видео, архивы любого типа</div>
+        </div>
+      )}
       <header className="chat-header flex items-center gap-2 p-3 border-b border-white/10">
         {onBack && (
           <button className="btn-ghost md:hidden" onClick={onBack} aria-label="Назад">

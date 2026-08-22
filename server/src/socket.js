@@ -453,10 +453,10 @@ export function attachSocket(httpServer) {
     // юзер мог бы подбросить SDP/ICE любому другому, имитируя звонок —
     // это позволяло слать «фейковые» offer'ы и DoS-ить клиента.
     const forward = (event) => (payload) => {
-      const to = payload?.to;
+      const to = Number(payload?.to);
       const callId = payload?.callId;
-      const groupId = payload?.groupId;
-      if (typeof to !== 'number') return;
+      const groupId = payload?.groupId != null ? Number(payload?.groupId) : null;
+      if (!to || isNaN(to)) return;
       if (typeof callId !== 'string' || !callId) return;
       // Группа: callId зарегистрирован в groupCallRegistry, оба должны быть в нём.
       if (groupId != null) {
@@ -470,18 +470,23 @@ export function attachSocket(httpServer) {
         const pair = new Set([c.callerId, c.calleeId]);
         if (!pair.has(me.id) || !pair.has(to)) return;
       }
-      io.to(roomOf(to)).emit(event, { ...payload, from: me.id, fromUsername: me.username });
+      io.to(roomOf(to)).emit(event, { ...payload, to, from: me.id, fromUsername: me.username });
     };
 
     // call:invite — обновлённая логика:
     // 1) пишем системное сообщение в чат у обеих сторон через registerInvite()
     // 2) если callee НЕ замутил каллера — поднимаем модалку (как раньше)
     socket.on('call:invite', (payload) => {
-      const { callId, to, withVideo } = payload || {};
-      if (typeof callId !== 'string' || typeof to !== 'number') return;
+      const callId = payload?.callId;
+      const to = Number(payload?.to);
+      const withVideo = !!payload?.withVideo;
+      if (typeof callId !== 'string' || !to || isNaN(to)) return;
       const peer = db.prepare('SELECT id FROM users WHERE id = ?').get(to);
       if (!peer) return;
-      if (!canInteract(me.id, to)) return;
+      if (!canInteract(me.id, to)) {
+        socket.emit('call:reject', { callId, reason: 'not_allowed' });
+        return;
+      }
 
       // Между этими двумя может висеть незакрытый звонок:
       //   - waiting: был полноценный разговор, один ушёл, второй вернулся
@@ -599,8 +604,10 @@ export function attachSocket(httpServer) {
     });
 
     socket.on('call:end', (payload) => {
-      const { callId, to, reason } = payload || {};
-      if (typeof callId !== 'string' || typeof to !== 'number') return;
+      const callId = payload?.callId;
+      const to = Number(payload?.to);
+      const reason = payload?.reason;
+      if (typeof callId !== 'string' || !to || isNaN(to)) return;
       const c = getCall(callId);
       if (!c) return;
       // Звонок в registry ещё 60 сек висит после finalize (грейс-период

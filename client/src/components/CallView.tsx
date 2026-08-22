@@ -23,6 +23,7 @@ import { canShareScreen } from '../utils/media';
 import { useSettings } from '../context/SettingsContext';
 import { formatDuration, getAvatarUrl, getDisplayName } from '../utils/user';
 import { applySinkId } from '../utils/audioSink';
+import CallPingBadge from './CallPingBadge';
 
 const SettingsPanel = lazy(() => import('./SettingsPanel'));
 
@@ -373,10 +374,13 @@ export default function CallView({
         )}
 
         {/* Плашка-статус */}
-        <div className="absolute top-4 left-4 flex items-center gap-2">
+        <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
           <div className="px-3 py-1.5 text-xs rounded-full bg-black/60 backdrop-blur border border-white/10">
             {label}
           </div>
+          {call.stats && state === 'in-call' && (
+            <CallPingBadge stats={call.stats} />
+          )}
           {showRemoteVideo && (
             <div className="px-3 py-1.5 text-xs rounded-full bg-black/60 backdrop-blur border border-white/10 flex items-center gap-2">
               <Avatar name={getDisplayName(peer) || '?'} src={getAvatarUrl(peer)} size={20} />
