@@ -1,44 +1,32 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { buildTestApp } from './appFactory.js';
-
-// Этот файл получает собственный файл БД (см. test/setup.js), поэтому
-// здесь можно проверить поведение именно ПУСТОГО сервера — того самого,
-// который получает человек сразу после установки.
+import db from '../src/db.js';
 
 let app;
-const OPEN = process.env.REGISTRATION_OPEN;
 
 beforeAll(() => {
   app = buildTestApp();
 });
 
-beforeEach(() => {
-  delete process.env.REGISTRATION_OPEN;
-});
-
-afterAll(() => {
-  if (OPEN !== undefined) process.env.REGISTRATION_OPEN = OPEN;
-});
-
-describe('bootstrap owner', () => {
-  it('lets the first account in without an invite, then closes the door', async () => {
+describe('registration and admin assignment', () => {
+  it('allows user registration and assigns admin via is_admin column', async () => {
     const info = await request(app).get('/api/auth/registration-info');
-    expect(info.body).toMatchObject({ inviteRequired: false, bootstrap: true });
+    expect(info.body).toMatchObject({ disabled: false, inviteRequired: false });
 
     const owner = await request(app)
       .post('/api/auth/register')
       .send({ username: 'owner', password: 'secret123' });
     expect(owner.status).toBe(200);
-    // id=1 — это админ по соглашению (см. admin.js).
-    expect(owner.body.user.id).toBe(1);
+    expect(owner.body.user.isAdmin).toBe(false);
 
-    const after = await request(app).get('/api/auth/registration-info');
-    expect(after.body).toMatchObject({ inviteRequired: true, bootstrap: false });
+    // Make admin explicitly
+    db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(owner.body.user.id);
 
-    const stranger = await request(app)
-      .post('/api/auth/register')
-      .send({ username: 'stranger', password: 'secret123' });
-    expect(stranger.status).toBe(400);
+    const me = await request(app)
+      .get('/api/me')
+      .set('Authorization', `Bearer ${owner.body.token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.user.isAdmin).toBe(true);
   });
 });

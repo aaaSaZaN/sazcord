@@ -30,12 +30,10 @@ const GroupsContext = createContext(null);
  *   refresh()             — принудительно перечитать с сервера
  */
 export function GroupsProvider({ children }) {
-  const { auth } = useAuth();
+  const { auth, socket } = useAuth();
   const token = auth?.token;
   const [groups, setGroups] = useState([]);
   const [ready, setReady] = useState(false);
-
-  const socketRef = useRef(null);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -58,55 +56,37 @@ export function GroupsProvider({ children }) {
     refresh();
   }, [token, refresh]);
 
-  // Подписка на сокет-события. Ждём, пока сокет появится.
+  // Подписка на сокет-события групп
   useEffect(() => {
-    if (!token) return undefined;
-    let stopped = false;
-    let offFns = [];
+    if (!socket) return undefined;
 
-    const tryAttach = () => {
-      if (stopped) return;
-      const s = getSocket();
-      if (!s) {
-        setTimeout(tryAttach, 200);
-        return;
-      }
-      socketRef.current = s;
-
-      const onNew = (g) => {
-        setGroups((prev) => {
-          if (prev.some((x) => x.id === g.id)) {
-            return prev.map((x) => (x.id === g.id ? g : x));
-          }
-          return [g, ...prev];
-        });
-      };
-      const onUpdate = (g) => {
-        setGroups((prev) => prev.map((x) => (x.id === g.id ? g : x)));
-      };
-      const onDelete = ({ id }) => {
-        setGroups((prev) => prev.filter((x) => x.id !== id));
-      };
-
-      s.on('group:new', onNew);
-      s.on('group:update', onUpdate);
-      s.on('group:delete', onDelete);
-      s.on('connect', refresh);
-
-      offFns = [
-        () => s.off('group:new', onNew),
-        () => s.off('group:update', onUpdate),
-        () => s.off('group:delete', onDelete),
-        () => s.off('connect', refresh),
-      ];
+    const onNew = (g) => {
+      setGroups((prev) => {
+        if (prev.some((x) => x.id === g.id)) {
+          return prev.map((x) => (x.id === g.id ? g : x));
+        }
+        return [g, ...prev];
+      });
+    };
+    const onUpdate = (g) => {
+      setGroups((prev) => prev.map((x) => (x.id === g.id ? g : x)));
+    };
+    const onDelete = ({ id }) => {
+      setGroups((prev) => prev.filter((x) => x.id !== id));
     };
 
-    tryAttach();
+    socket.on('group:new', onNew);
+    socket.on('group:update', onUpdate);
+    socket.on('group:delete', onDelete);
+    socket.on('connect', refresh);
+
     return () => {
-      stopped = true;
-      offFns.forEach((fn) => fn());
+      socket.off('group:new', onNew);
+      socket.off('group:update', onUpdate);
+      socket.off('group:delete', onDelete);
+      socket.off('connect', refresh);
     };
-  }, [token, refresh]);
+  }, [socket, refresh]);
 
   const getGroup = useCallback((id) => groups.find((g) => g.id === id) || null, [groups]);
 

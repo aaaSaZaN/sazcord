@@ -16,6 +16,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.REGISTRATION_CODE;
   delete process.env.REGISTRATION_DISABLED;
+  delete process.env.REGISTRATION_INVITE_ONLY;
   delete process.env.ADMIN_USERNAMES;
 });
 
@@ -38,12 +39,13 @@ async function registerAsAdmin(username) {
 }
 
 describe('invites — admin API', () => {
-  it('non-admin gets 403, admin (id=1 by default) gets 200', async () => {
+  it('non-admin gets 403, admin (is_admin=1) gets 200', async () => {
     const first = await registerAndLogin('rootuser');
+    db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(first.user.id);
     const second = await registerAndLogin('peon');
 
-    expect(first.user.isAdmin).toBe(true);
-    expect(second.user.isAdmin).toBe(false);
+    const me1 = await request(app).get('/api/me').set('Authorization', `Bearer ${first.token}`);
+    expect(me1.body.user.isAdmin).toBe(true);
 
     const a = await request(app).get('/api/invites').set('Authorization', `Bearer ${second.token}`);
     expect(a.status).toBe(403);
@@ -104,6 +106,7 @@ describe('invites — admin API', () => {
 describe('invites — registration with DB codes', () => {
   it('one-time code allows exactly one registration', async () => {
     const admin = await registerAsAdmin('master');
+    process.env.REGISTRATION_INVITE_ONLY = '1';
     const created = await request(app)
       .post('/api/invites')
       .set('Authorization', `Bearer ${admin.token}`)

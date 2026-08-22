@@ -531,6 +531,25 @@ export default function Home() {
       });
     };
 
+    const onUserJoined = ({ user }) => {
+      if (!user) return;
+      setUsers((prev) => {
+        if (prev.some((u) => u.id === user.id)) {
+          return prev.map((u) => (u.id === user.id ? { ...u, ...user } : u));
+        }
+        return applyPresence([...prev, user]);
+      });
+    };
+
+    const onUserUpdate = ({ user }) => {
+      if (!user) return;
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, ...user } : u)));
+    };
+
+    const onUsersUpdate = () => {
+      reloadUsers();
+    };
+
     socket.on('connect', onConnect);
     // Сокет мог подключиться ДО монтирования Home (его поднимает
     // AuthContext) — тогда события 'connect' и 'presence:list' мы уже
@@ -538,6 +557,9 @@ export default function Home() {
     if (socket.connected) onConnect();
     socket.on('presence:list', onPresenceList);
     socket.on('presence', onPresence);
+    socket.on('user:joined', onUserJoined);
+    socket.on('user:update', onUserUpdate);
+    socket.on('users:update', onUsersUpdate);
     socket.on('dm:new', onDm);
     socket.on('dm:update', onDmUpdate);
     socket.on('dm:delete', onDmDelete);
@@ -554,6 +576,9 @@ export default function Home() {
       socket.off('connect', onConnect);
       socket.off('presence:list', onPresenceList);
       socket.off('presence', onPresence);
+      socket.off('user:joined', onUserJoined);
+      socket.off('user:update', onUserUpdate);
+      socket.off('users:update', onUsersUpdate);
       socket.off('dm:new', onDm);
       socket.off('dm:update', onDmUpdate);
       socket.off('dm:delete', onDmDelete);
@@ -991,6 +1016,8 @@ export default function Home() {
         limit?: number;
         caption?: string;
         replyToId?: number | null;
+        onProgress?: (pct: number, loaded: number, total: number) => void;
+        signal?: AbortSignal;
       } = {},
     ) => {
       if (!selected) return;
@@ -1005,12 +1032,33 @@ export default function Home() {
       try {
         const replyToId = opts.replyToId ?? null;
         if (selected.kind === 'group') {
-          await api.sendGroupFile(token, selected.id, files, opts.caption || '', replyToId);
+          await api.sendGroupFile(
+            token,
+            selected.id,
+            files,
+            opts.caption || '',
+            replyToId,
+            opts.onProgress,
+            opts.signal,
+          );
         } else {
-          await api.sendFile(token, selected.id, files, opts.caption || '', replyToId);
+          await api.sendFile(
+            token,
+            selected.id,
+            files,
+            opts.caption || '',
+            replyToId,
+            opts.onProgress,
+            opts.signal,
+          );
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (e?.name === 'AbortError' || opts.signal?.aborted) {
+          toast.info?.('Загрузка отменена');
+          throw e;
+        }
         toast.error(e.message || 'Не удалось отправить файл');
+        throw e;
       }
     },
     [maxUploadBytes, selected, toast, token],

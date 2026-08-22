@@ -76,28 +76,74 @@ async function request<T>(
   return data as T;
 }
 
-async function requestMultipart<T>(
+export type UploadProgressCallback = (percent: number, loaded: number, total: number) => void;
+
+function requestMultipart<T>(
   path: string,
   {
     token,
     formData,
     method = 'POST',
-  }: { token?: string | null; formData: FormData; method?: string },
+    onProgress,
+    signal,
+  }: {
+    token?: string | null;
+    formData: FormData;
+    method?: string;
+    onProgress?: UploadProgressCallback;
+    signal?: AbortSignal;
+  },
 ): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE}${path}`, { method, headers, body: formData });
-  let data: unknown = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* no body */
-  }
-  if (!res.ok) {
-    handle401(path, res.status, data);
-    throw new ApiError((isErrorBody(data) && data.error) || `HTTP ${res.status}`, res.status);
-  }
-  return data as T;
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, `${BASE}${path}`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    if (onProgress && xhr.upload) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && e.total > 0) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          onProgress(pct, e.loaded, e.total);
+        }
+      };
+    }
+
+    if (signal) {
+      if (signal.aborted) {
+        reject(new DOMException('Upload aborted', 'AbortError'));
+        return;
+      }
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        reject(new DOMException('Upload aborted', 'AbortError'));
+      });
+    }
+
+    xhr.onload = () => {
+      let data: unknown = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        /* no body */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as T);
+      } else {
+        handle401(path, xhr.status, data);
+        reject(new ApiError((isErrorBody(data) && data.error) || `HTTP ${xhr.status}`, xhr.status));
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new ApiError('Network error during upload', 0));
+    };
+
+    xhr.onabort = () => {
+      reject(new DOMException('Upload aborted', 'AbortError'));
+    };
+
+    xhr.send(formData);
+  });
 }
 
 // Расширение по фактическому контейнеру blob'а: Safari пишет audio/mp4,
@@ -114,7 +160,7 @@ export const api = {
     username: string,
     password: string,
     invite?: string,
-    opts: { privacyConsent?: boolean; displayName?: string; bio?: string } = {},
+    opts: { displayName?: string; bio?: string } = {},
   ) =>
     request<AuthSession>('/api/auth/register', {
       method: 'POST',
@@ -122,12 +168,6 @@ export const api = {
         username,
         password,
         invite: invite || undefined,
-        // Передаём только если действительно поставили чекбокс — чтобы
-        // случайно не зашить `false` в payload и не сломать сценарий
-        // «модуль выключен». Сервер всё равно делает строгую проверку.
-        privacyConsent: opts.privacyConsent === true ? true : undefined,
-        // Приходят только со страницы приглашения: обычная форма
-        // регистрации этих полей не спрашивает.
         displayName: opts.displayName || undefined,
         bio: opts.bio || undefined,
       },
@@ -138,18 +178,15 @@ export const api = {
     request<{
       disabled: boolean;
       inviteRequired: boolean;
-      // Сервер пустой: этот аккаунт станет первым и получит админку.
       bootstrap: boolean;
-      privacyEnabled: boolean;
-      requirePrivacyConsent: boolean;
     }>('/api/auth/registration-info'),
   me: (token: string) => request<{ user: User }>('/api/me', { token }),
   updateMe: (token: string, patch: Partial<User>) =>
     request<{ user: User }>('/api/me', { method: 'PATCH', body: patch, token }),
-  uploadAvatar: (token: string, file: File) => {
+  uploadAvatar: (token: string, file: File, onProgress?: UploadProgressCallback, signal?: AbortSignal) => {
     const fd = new FormData();
     fd.append('avatar', file);
-    return requestMultipart<{ user: User }>('/api/me/avatar', { token, formData: fd });
+    return requestMultipart<{ user: User }>('/api/me/avatar', { token, formData: fd, onProgress, signal });
   },
   deleteAvatar: (token: string) =>
     request<{ user: User }>('/api/me/avatar', { method: 'DELETE', token }),
@@ -163,6 +200,8 @@ export const api = {
     blob: Blob,
     durationMs: number,
     replyToId?: number | null,
+    onProgress?: UploadProgressCallback,
+    signal?: AbortSignal,
   ) => {
     const fd = new FormData();
     fd.append('to', String(to));
@@ -172,6 +211,8 @@ export const api = {
     return requestMultipart<{ ok: true; message: Message }>('/api/messages/voice', {
       token,
       formData: fd,
+      onProgress,
+      signal,
     });
   },
   editMessage: (token: string, id: number, content: string) =>
@@ -203,6 +244,8 @@ export const api = {
     files: File | File[],
     content = '',
     replyToId?: number | null,
+    onProgress?: UploadProgressCallback,
+    signal?: AbortSignal,
   ) => {
     const fd = new FormData();
     fd.append('to', String(to));
@@ -218,6 +261,8 @@ export const api = {
     return requestMultipart<{ ok: true; message: Message }>('/api/messages/file', {
       token,
       formData: fd,
+      onProgress,
+      signal,
     });
   },
   listMutes: (token: string) => request<{ ids: number[] }>('/api/mutes', { token }),
@@ -274,10 +319,21 @@ export const api = {
       body: { role },
       token,
     }),
-  uploadGroupAvatar: (token: string, id: number, file: File) => {
+  uploadGroupAvatar: (
+    token: string,
+    id: number,
+    file: File,
+    onProgress?: UploadProgressCallback,
+    signal?: AbortSignal,
+  ) => {
     const fd = new FormData();
     fd.append('avatar', file);
-    return requestMultipart<{ group: Group }>(`/api/groups/${id}/avatar`, { token, formData: fd });
+    return requestMultipart<{ group: Group }>(`/api/groups/${id}/avatar`, {
+      token,
+      formData: fd,
+      onProgress,
+      signal,
+    });
   },
   deleteGroupAvatar: (token: string, id: number) =>
     request<{ group: Group }>(`/api/groups/${id}/avatar`, { method: 'DELETE', token }),
@@ -296,8 +352,7 @@ export const api = {
       token,
     }),
 
-  // 152-ФЗ право на доступ к своим данным. Возвращает Promise<Blob>,
-  // который вызывающий код сохраняет как файл (через FileSaver/anchor).
+  // Выгрузка данных пользователя в JSON.
   dataExport: async (token: string): Promise<Blob> => {
     const res = await fetch(`${BASE}/api/me/data-export`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -378,6 +433,8 @@ export const api = {
     blob: Blob,
     durationMs: number,
     replyToId?: number | null,
+    onProgress?: UploadProgressCallback,
+    signal?: AbortSignal,
   ) => {
     const fd = new FormData();
     fd.append('durationMs', String(durationMs || 0));
@@ -386,6 +443,8 @@ export const api = {
     return requestMultipart<{ ok: true; message: Message }>(`/api/groups/${id}/messages/voice`, {
       token,
       formData: fd,
+      onProgress,
+      signal,
     });
   },
   sendGroupFile: (
@@ -394,6 +453,8 @@ export const api = {
     files: File | File[],
     content = '',
     replyToId?: number | null,
+    onProgress?: UploadProgressCallback,
+    signal?: AbortSignal,
   ) => {
     const fd = new FormData();
     if (content) fd.append('content', content);
@@ -408,6 +469,8 @@ export const api = {
     return requestMultipart<{ ok: true; message: Message }>(`/api/groups/${id}/messages/file`, {
       token,
       formData: fd,
+      onProgress,
+      signal,
     });
   },
   // Реакции на сообщения

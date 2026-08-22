@@ -13,13 +13,10 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
   const [invite, setInvite] = useState('');
-  const [consent, setConsent] = useState(false);
   const [info, setInfo] = useState({
     disabled: false,
     inviteRequired: false,
     bootstrap: false,
-    privacyEnabled: false,
-    requirePrivacyConsent: false,
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -47,15 +44,9 @@ export default function Register() {
       setError(t('register.passwordMismatch'));
       return;
     }
-    if (info.requirePrivacyConsent && !consent) {
-      setError(t('register.consentRequired'));
-      return;
-    }
     setLoading(true);
     try {
-      await register(username.trim(), password, invite.trim() || undefined, {
-        privacyConsent: consent,
-      });
+      await register(username.trim(), password, invite.trim() || undefined);
     } catch (err) {
       setError(err.message || t('register.error'));
     } finally {
@@ -99,11 +90,13 @@ export default function Register() {
           <label className="text-sm text-slate-300">{t('common.username')}</label>
           <input
             className="input"
-            autoFocus
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
+            autoFocus
             required
+            minLength={3}
+            maxLength={24}
+            autoComplete="username"
           />
         </div>
 
@@ -111,21 +104,21 @@ export default function Register() {
           <label className="text-sm text-slate-300">{t('common.password')}</label>
           <PasswordInput
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            minLength={6}
+            onChange={setPassword}
             required
+            minLength={6}
+            autoComplete="new-password"
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm text-slate-300">{t('common.passwordRepeat')}</label>
+          <label className="text-sm text-slate-300">{t('register.repeatPassword')}</label>
           <PasswordInput
             value={password2}
-            onChange={(e) => setPassword2(e.target.value)}
-            autoComplete="new-password"
-            minLength={6}
+            onChange={setPassword2}
             required
+            minLength={6}
+            autoComplete="new-password"
           />
         </div>
 
@@ -149,55 +142,17 @@ export default function Register() {
           </div>
         )}
 
-        {info.requirePrivacyConsent && (
-          <label className="flex items-start gap-2 text-xs text-slate-400 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-              required
-            />
-            <span>
-              {t('register.consent')}{' '}
-              <a
-                href="/privacy"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-accent hover:underline"
-              >
-                {t('register.consentLink')}
-              </a>{' '}
-              (152-ФЗ).
-            </span>
-          </label>
-        )}
-
         {error && <div className="text-sm text-danger">{error}</div>}
 
         <button type="submit" className="btn-primary w-full" disabled={loading}>
           {loading ? t('register.submitting') : t('register.submit')}
         </button>
 
-        <div className="text-sm text-slate-400 text-center space-y-1">
-          <div>
-            {t('register.haveAccount')}{' '}
-            <Link to="/login" className="text-accent hover:underline">
-              {t('common.login')}
-            </Link>
-          </div>
-          {info.privacyEnabled && !info.requirePrivacyConsent && (
-            <div className="text-xs text-slate-500">
-              <a
-                href="/privacy"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="hover:underline"
-              >
-                {t('register.privacyPolicy')}
-              </a>
-            </div>
-          )}
+        <div className="text-sm text-slate-400 text-center">
+          {t('register.haveAccount')}{' '}
+          <Link to="/login" className="text-accent hover:underline">
+            {t('common.login')}
+          </Link>
         </div>
       </form>
     </div>

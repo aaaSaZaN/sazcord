@@ -11,12 +11,8 @@ let member3;
 
 beforeAll(async () => {
   app = buildTestApp();
-  // Первый зарегистрированный (id=1) считается админом, когда
-  // ADMIN_USERNAMES не задан.
   admin = await register('inv_admin');
-  // Всех подопытных заводим ЗДЕСЬ, пока в базе нет ни одного активного
-  // кода: как только он появляется, регистрация начинает требовать
-  // приглашение (см. hasActiveDbCodes в routes/auth.js).
+  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(admin.user.id);
   member1 = await register('inv_member1');
   member2 = await register('inv_member2');
   member3 = await register('inv_member3');

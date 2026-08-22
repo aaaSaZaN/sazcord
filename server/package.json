@@ -14,7 +14,8 @@
     "start": "node src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "migrate:friends": "node scripts/migrateFriends.js"
+    "migrate:friends": "node scripts/migrateFriends.js",
+    "rescue": "node ../scripts/rescue.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

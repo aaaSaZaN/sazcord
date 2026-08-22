@@ -7,17 +7,31 @@ import { isAdminUser } from '../admin.js';
 import { uploadAvatar, publicPathFor, absolutePathFor, sniff } from '../uploads.js';
 import { MIN_PASSWORD_LENGTH } from '../config.js';
 import { quotaPrecheck } from '../quota.js';
-import { emitToUser } from '../ioHub.js';
+import { emitToUser, emitToAll } from '../ioHub.js';
+import { visibleUserIds, isPrivateMode } from '../social.js';
 import { softDeleteUser } from '../accountDeletion.js';
 
 const router = Router();
 
 const DISPLAY_RE = /^[\p{L}\p{N}\p{M} _.-]{1,32}$/u;
 
+function broadcastUserUpdate(userId, user) {
+  if (isPrivateMode()) {
+    const audience = visibleUserIds(userId);
+    if (audience) {
+      for (const uid of audience) {
+        if (uid !== userId) emitToUser(uid, 'user:update', { user });
+      }
+    }
+  } else {
+    emitToAll('user:update', { user });
+  }
+}
+
 function readUser(id) {
   const row = db
     .prepare(
-      `SELECT id, username, display_name, avatar_path, hide_on_delete, created_at
+      `SELECT id, username, display_name, avatar_path, hide_on_delete, is_admin, created_at
        FROM users WHERE id = ?`,
     )
     .get(id);
@@ -71,14 +85,13 @@ router.patch('/', authRequired, (req, res) => {
 
   const user = readUser(req.user.id);
   emitToUser(req.user.id, 'profile:self', user);
+  broadcastUserUpdate(req.user.id, user);
   res.json({ user });
 });
 
 router.post(
   '/avatar',
   authRequired,
-  // Аватары в attachment_size не учитываются, поэтому полноценная
-  // квота к ним неприменима — но стоп по свободному месту нужен и тут.
   quotaPrecheck,
   uploadAvatar.single('avatar'),
   sniff('image'),
@@ -100,6 +113,7 @@ router.post(
 
     const user = readUser(req.user.id);
     emitToUser(req.user.id, 'profile:self', user);
+    broadcastUserUpdate(req.user.id, user);
     res.json({ user });
   },
 );
@@ -150,23 +164,13 @@ router.delete('/', authRequired, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Право субъекта ПДн на доступ к своим данным (152-ФЗ, ст. 14).
-// Возвращает JSON со всем, что хранится в БД для этого пользователя:
-// профиль, согласие на обработку, отправленные сообщения (1:1 + группы),
-// статусы прочтения, инвайт-коды, которые он выпустил, мьюты.
-//
-// Намеренно НЕ включаем сюда хеш пароля и сообщения других пользователей
-// (даже те, что адресованы запросившему): хеш — security-sensitive, а
-// чужие сообщения принадлежат их авторам и должны выгружаться по их
-// собственному запросу. Файлы (вложения/голосовые) не дублируем в JSON
-// из-за размера — их можно скачать по обычному URL `/uploads/...`,
-// который указан в поле `attachmentPath` каждого сообщения.
+// Выгрузка данных пользователя в JSON.
 router.get('/data-export', authRequired, (req, res) => {
   const uid = req.user.id;
   const user = db
     .prepare(
       `SELECT id, username, display_name, avatar_path, hide_on_delete,
-              created_at, deleted_at, privacy_consent_at
+              created_at, deleted_at
        FROM users WHERE id = ?`,
     )
     .get(uid);
@@ -217,7 +221,6 @@ router.get('/data-export', authRequired, (req, res) => {
       hideOnDelete: !!user.hide_on_delete,
       createdAt: user.created_at,
       deletedAt: user.deleted_at,
-      privacyConsentAt: user.privacy_consent_at,
     },
     messages: sent,
     groups,
@@ -238,6 +241,7 @@ router.delete('/avatar', authRequired, (req, res) => {
   db.prepare('UPDATE users SET avatar_path = NULL WHERE id = ?').run(req.user.id);
   const user = readUser(req.user.id);
   emitToUser(req.user.id, 'profile:self', user);
+  broadcastUserUpdate(req.user.id, user);
   res.json({ user });
 });
 

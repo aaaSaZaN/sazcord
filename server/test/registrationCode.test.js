@@ -56,31 +56,20 @@ describe('registration gating', () => {
   });
 });
 
-describe('registration is closed by default', () => {
-  // Проверяем главное свойство: инстанс, поднятый без единой настройки,
-  // не открыт всему интернету. Тестовый setup.js выставляет
-  // REGISTRATION_OPEN=1 ради остальных тестов — здесь снимаем.
-  const OPEN = process.env.REGISTRATION_OPEN;
-  beforeEach(() => {
-    delete process.env.REGISTRATION_OPEN;
-  });
-  afterEach(() => {
-    if (OPEN !== undefined) process.env.REGISTRATION_OPEN = OPEN;
-  });
-
-  it('requires an invite once the server has users', async () => {
-    // База в этом файле уже не пустая (см. тесты выше), так что владелец
-    // «занят» и свободная регистрация должна быть закрыта.
+describe('invite-only registration control', () => {
+  it('requires an invite when REGISTRATION_INVITE_ONLY=1', async () => {
+    process.env.REGISTRATION_INVITE_ONLY = '1';
     const info = await request(app).get('/api/auth/registration-info');
-    expect(info.body).toMatchObject({ disabled: false, inviteRequired: true, bootstrap: false });
+    expect(info.body).toMatchObject({ disabled: false, inviteRequired: true });
 
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'closed_by_default', password: 'secret123' });
+      .send({ username: 'closed_without_code', password: 'secret123' });
     expect(res.status).toBe(400);
   });
 
-  it('REGISTRATION_OPEN=1 opens it back up', async () => {
+  it('allows registration when open by default or with REGISTRATION_OPEN=1', async () => {
+    delete process.env.REGISTRATION_INVITE_ONLY;
     process.env.REGISTRATION_OPEN = '1';
     const res = await request(app)
       .post('/api/auth/register')

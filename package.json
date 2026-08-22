@@ -2,6 +2,7 @@
   "name": "sazcord",
   "version": "0.10.1",
   "private": true,
+  "type": "module",
   "description": "Self-hosted minimal messenger with voice/video calls and screen sharing",
   "license": "AGPL-3.0-or-later",
   "author": "Sazcord",
@@ -36,7 +37,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "deploy:trigger": "powershell -ExecutionPolicy Bypass -File scripts/trigger-pipeline.ps1",
-    "migrate:friends": "npm --workspace server run migrate:friends --"
+    "migrate:friends": "npm --workspace server run migrate:friends --",
+    "rescue": "node scripts/rescue.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

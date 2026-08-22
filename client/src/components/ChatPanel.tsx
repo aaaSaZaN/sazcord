@@ -16,6 +16,7 @@ import {
   Forward as ForwardIcon,
   Reply as ReplyIcon,
   CheckSquare,
+  Upload,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import ContextMenu from './ContextMenu';
@@ -31,6 +32,14 @@ import {
 } from '../utils/user';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1)} МБ`;
+  const kb = bytes / 1024;
+  return `${kb.toFixed(0)} КБ`;
+}
 
 function formatLimit(bytes) {
   const mb = Math.round(bytes / 1024 / 1024);
@@ -90,6 +99,12 @@ export default function ChatPanel({
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    percent: number;
+    loaded: number;
+    total: number;
+  } | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [previewZoom, setPreviewZoom] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -321,28 +336,55 @@ export default function ChatPanel({
     );
   }
 
+  const cancelUpload = () => {
+    if (uploadAbortRef.current) {
+      uploadAbortRef.current.abort();
+      uploadAbortRef.current = null;
+    }
+    setUploading(false);
+    setUploadProgress(null);
+    setSending(false);
+  };
+
   const send = async () => {
     const trimmed = text.trim();
     const hasAttachments = pendingAttachments.length > 0;
-    if ((!trimmed && !hasAttachments) || sending) return;
-    // Если есть активный preview-бар ответа — берём его id и сбрасываем
-    // ДО await, чтобы повторная отправка по случайному двойному Enter не
-    // прицепила тот же reply дважды.
+    if ((!trimmed && !hasAttachments) || sending || uploading) return;
     const replyToId = replyingTo?.id ?? null;
     setReplyingTo(null);
     setSending(true);
-    try {
-      if (hasAttachments) {
-        // Отправляем все attachment'ы в одном сообщении
-        await onSendFile?.(pendingAttachments, { caption: trimmed, replyToId });
+    if (hasAttachments) {
+      setUploading(true);
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
+      try {
+        await onSendFile?.(pendingAttachments, {
+          caption: trimmed,
+          replyToId,
+          onProgress: (percent, loaded, total) => {
+            setUploadProgress({ percent, loaded, total });
+          },
+          signal: controller.signal,
+        });
         setPendingAttachments([]);
-      } else {
-        await onSend(trimmed, replyToId);
+        setText('');
+        stopTyping();
+      } catch (err: any) {
+        // Abort handled
+      } finally {
+        setUploading(false);
+        setUploadProgress(null);
+        uploadAbortRef.current = null;
+        setSending(false);
       }
-      setText('');
-      stopTyping();
-    } finally {
-      setSending(false);
+    } else {
+      try {
+        await onSend(trimmed, replyToId);
+        setText('');
+        stopTyping();
+      } finally {
+        setSending(false);
+      }
     }
   };
 
@@ -812,6 +854,34 @@ export default function ChatPanel({
             selfId={selfId}
             onCancel={() => setReplyingTo(null)}
           />
+        )}
+        {uploadProgress && (
+          <div className="mb-2 p-2.5 rounded-xl bg-bg-2 border border-border flex flex-col gap-1.5 animate-fadeIn">
+            <div className="flex items-center justify-between text-xs text-slate-300">
+              <div className="flex items-center gap-2">
+                <Upload size={14} className="text-accent animate-pulse" />
+                <span className="font-medium">Загрузка… {uploadProgress.percent}%</span>
+                <span className="text-slate-400">
+                  ({formatBytes(uploadProgress.loaded)} / {formatBytes(uploadProgress.total)})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={cancelUpload}
+                className="px-2 py-0.5 rounded bg-danger/20 text-danger hover:bg-danger/30 text-xs flex items-center gap-1 transition-colors"
+                title="Отменить загрузку"
+              >
+                <X size={12} />
+                Отмена
+              </button>
+            </div>
+            <div className="w-full bg-bg-3 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="bg-accent h-full rounded-full transition-all duration-150"
+                style={{ width: `${Math.max(2, uploadProgress.percent)}%` }}
+              />
+            </div>
+          </div>
         )}
         {peerDeleted ? (
           <div className="px-3 py-2 rounded-lg bg-bg-3 text-slate-400 text-sm text-center">

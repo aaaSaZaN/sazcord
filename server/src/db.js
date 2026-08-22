@@ -97,7 +97,7 @@ addColumn('users', 'display_name', 'TEXT');
 addColumn('users', 'avatar_path', 'TEXT');
 addColumn('users', 'hide_on_delete', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('users', 'deleted_at', 'INTEGER');
-addColumn('users', 'privacy_consent_at', 'INTEGER');
+addColumn('users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0');
 // «О себе» — заполняется при регистрации по ссылке-приглашению и в профиле.
 addColumn('users', 'bio', 'TEXT');
 // Кто позвал. Нужен, чтобы в private-режиме сразу связать новичка с

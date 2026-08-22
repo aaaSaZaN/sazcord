@@ -1,10 +1,5 @@
-// Таб «Приватность»: тумблер «полностью удалять мои сообщения» + выгрузка
-// данных пользователя в JSON (право по ст. 14 152-ФЗ). Ссылка на
-// политику обработки ПДн показывается, только если на сервере включён
-// compliance-модуль (config.privacy.enabled).
-
-import { useEffect, useState } from 'react';
-import { Trash2, Download, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { Trash2, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { api } from '../../api';
@@ -16,24 +11,6 @@ export function PrivacyTab() {
   const user = auth?.user;
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
-  // Серверная конфигурация compliance-модуля. Запрашиваем один раз —
-  // по `enabled` решаем, показывать ли ссылку на политику.
-  const [privacyEnabled, setPrivacyEnabled] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/config')
-      .then((r) => r.json())
-      .then((cfg) => {
-        if (!cancelled) setPrivacyEnabled(!!cfg?.privacy?.enabled);
-      })
-      .catch(() => {
-        /* серверу плохо — оставим выключенным */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const setHide = async (next: boolean) => {
     setSaving(true);
@@ -47,8 +24,6 @@ export function PrivacyTab() {
     }
   };
 
-  // Скачивание JSON-выгрузки. Сервер уже отдаёт правильный
-  // Content-Disposition, нам остаётся только превратить blob в файл.
   const onExport = async () => {
     if (!auth?.token) return;
     setExporting(true);
@@ -84,13 +59,13 @@ export function PrivacyTab() {
       <div className="h-px bg-border" />
 
       <div className="space-y-2">
-        <div className="text-xs uppercase tracking-wider text-slate-500">Мои данные</div>
+        <div className="text-xs uppercase tracking-wider text-slate-500">Экспорт данных</div>
         <div className="rounded-lg border border-border bg-bg-2 p-3 space-y-3">
           <div>
             <div className="text-sm font-medium">Скачать мои данные</div>
             <p className="text-xs text-slate-400 mt-1">
               JSON со всеми данными вашей учётной записи: профиль, отправленные сообщения, группы,
-              выпущенные приглашения, мьюты. Право, предусмотренное ст. 14 152-ФЗ.
+              выпущенные приглашения, мьюты.
             </p>
           </div>
           <button
@@ -102,19 +77,6 @@ export function PrivacyTab() {
             <Download size={14} />
             {exporting ? 'Готовим…' : 'Скачать (JSON)'}
           </button>
-          {privacyEnabled && (
-            <div className="text-xs">
-              <a
-                href="/privacy"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-accent hover:underline inline-flex items-center gap-1"
-              >
-                Политика обработки персональных данных
-                <ExternalLink size={11} />
-              </a>
-            </div>
-          )}
         </div>
       </div>
     </section>

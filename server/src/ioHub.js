@@ -16,6 +16,11 @@ export function groupRoomOf(groupId) {
   return `group:${groupId}`;
 }
 
+export function emitToAll(event, payload) {
+  if (!io) return;
+  io.emit(event, payload);
+}
+
 export function emitToUser(userId, event, payload) {
   if (!io) return;
   io.to(roomOf(userId)).emit(event, payload);

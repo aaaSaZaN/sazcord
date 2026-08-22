@@ -102,14 +102,29 @@ export function AudioTab() {
     typeof HTMLAudioElement !== 'undefined' && 'setSinkId' in HTMLAudioElement.prototype;
 
   const refreshPermissions = async () => {
-    const [microphone, camera] = await Promise.all([
+    let [microphone, camera] = await Promise.all([
       queryPermission('microphone'),
       queryPermission('camera'),
     ]);
-    setPermissions({
-      microphone,
-      camera,
-    });
+
+    // Если queryPermission вернул prompt/unknown, проверяем наличие labels у устройств:
+    // браузер раскрывает имена устройств только при выданных правах.
+    try {
+      if (navigator.mediaDevices?.enumerateDevices) {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const hasAudioLabel = devs.some((d) => d.kind === 'audioinput' && d.label);
+        const hasVideoLabel = devs.some((d) => d.kind === 'videoinput' && d.label);
+        if (hasAudioLabel) microphone = 'granted';
+        if (hasVideoLabel) camera = 'granted';
+      }
+    } catch {
+      /* ignore */
+    }
+
+    setPermissions((prev) => ({
+      microphone: microphone !== 'unknown' ? microphone : prev.microphone,
+      camera: camera !== 'unknown' ? camera : prev.camera,
+    }));
   };
 
   useEffect(() => {
@@ -135,12 +150,15 @@ export function AudioTab() {
     try {
       if (kind === 'microphone') {
         stream = await mediaDevices.getUserMedia({ audio: true });
+        setPermissions((prev) => ({ ...prev, microphone: 'granted' }));
         toast.success('Доступ к микрофону разрешён');
       } else if (kind === 'camera') {
         stream = await mediaDevices.getUserMedia({ video: true });
+        setPermissions((prev) => ({ ...prev, camera: 'granted' }));
         toast.success('Доступ к камере разрешён');
       } else if (kind === 'media') {
         stream = await mediaDevices.getUserMedia({ audio: true, video: true });
+        setPermissions({ microphone: 'granted', camera: 'granted' });
         toast.success('Доступ к микрофону и камере разрешён');
       }
       stopMediaStream(stream);

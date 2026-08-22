@@ -21,7 +21,6 @@ import { UPLOADS_DIR, MAX_UPLOAD_BYTES } from './uploads.js';
 import { UPDATES_DIR, SERVER_VERSION, versionManifest } from './updates.js';
 import { startRetention } from './retention.js';
 import { buildCorsOptions, buildHelmet, apiLimiter, authLimiter, isProd } from './security.js';
-import { privacyConfig, privacyHtml } from './privacy.js';
 import { socialMode } from './social.js';
 import { membersMayInvite } from './invites.js';
 import cors from 'cors';
@@ -164,7 +163,6 @@ app.use('/api/admin', adminRoutes);
 
 // Публичный конфиг клиента (лимиты, фичи).
 app.get('/api/config', (_req, res) => {
-  const pc = privacyConfig();
   res.json({
     maxUploadBytes: MAX_UPLOAD_BYTES,
     // 'local' — все видят всех; 'private' — только друзья и соучастники
@@ -175,47 +173,13 @@ app.get('/api/config', (_req, res) => {
     // Клиенту нужно, чтобы решить, показывать ли ему раздел «Приглашения»:
     // сам эндпоинт всё равно проверяет право на каждый запрос.
     invitesByMembers: membersMayInvite(),
-    // Включён ли блок 152-ФЗ. Клиент использует это, чтобы:
-    //   * показать ссылку «Политика конфиденциальности» на страницах входа/регистрации;
-    //   * показать чекбокс согласия на регистрации (если requireConsent=true);
-    //   * включить кнопку «Скачать мои данные» в настройках.
-    privacy: {
-      enabled: pc.enabled,
-      requireConsent: pc.requireConsent,
-    },
   });
 });
 
 // Версия сервера и доступные сборки клиентов по платформам.
-//
-// Зачем отдельно от /updates/*: у веб-клиента и PWA своего апдейтера нет
-// вообще (electron-updater — только в десктопе, UpdateChecker — только в
-// APK). Для них «обновление» = сервер раздаёт сборку новее той, что
-// загружена в этой вкладке, и лечится перезагрузкой страницы. Клиент
-// сравнивает `server` со своей вшитой при сборке версией.
-//
-// Без авторизации намеренно: секретов тут нет, а знать про обновление
-// полезно и на экране логина. Каталог /updates и так раздаётся открыто —
-// иначе апдейтеры не смогли бы качать инсталляторы.
 app.get('/api/version', (_req, res) => {
-  // Клиенты опрашивают периодически — пусть промежуточные прокси не
-  // подсовывают им вчерашний ответ.
   res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.json(versionManifest());
-});
-
-// Страница политики обработки ПДн. Если оператор не задан в .env —
-// 404 (фронт в этом случае ссылку и не покажет). Контент собирается из
-// шаблона по ENV-переменным; для кастомного текста положи свой
-// `/privacy` в nginx — он перехватит запрос до проксирования на node.
-app.get('/privacy', (_req, res) => {
-  const html = privacyHtml();
-  if (!html)
-    return res
-      .status(404)
-      .type('text/plain')
-      .send('privacy policy is not configured on this server');
-  res.type('text/html; charset=utf-8').send(html);
 });
 
 // Глобальный обработчик ошибок (multer/прочее) — возвращает JSON вместо HTML.
