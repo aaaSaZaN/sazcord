@@ -122,6 +122,20 @@ export default function ChatPanel({
   const fileInputRef = useRef(null);
   const dropZoneRef = useRef(null);
   const typingActiveRef = useRef(false);
+  const dragCounterRef = useRef(0);
+
+  useEffect(() => {
+    const prevent = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
+
   // Resizable embedded call. callHeight — высота блока звонка в px.
   // rootRef нужен, чтобы посчитать максимально допустимую высоту с учётом
   // фактической высоты ChatPanel (минус место под чат). callBlockRef
@@ -501,20 +515,6 @@ export default function ChatPanel({
     else stopTyping();
   };
 
-  const dragCounterRef = useRef(0);
-
-  useEffect(() => {
-    const prevent = (e: DragEvent) => {
-      e.preventDefault();
-    };
-    window.addEventListener('dragover', prevent);
-    window.addEventListener('drop', prevent);
-    return () => {
-      window.removeEventListener('dragover', prevent);
-      window.removeEventListener('drop', prevent);
-    };
-  }, []);
-
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -594,19 +594,6 @@ export default function ChatPanel({
       console.error('Failed to toggle reaction:', err);
     }
   };
-
-  if (!peer && !group) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-4">
-        {onBack && (
-          <button className="btn-ghost md:hidden absolute top-4 left-4" onClick={onBack} aria-label="Назад">
-            <ArrowLeft size={18} />
-          </button>
-        )}
-        <div className="text-base font-medium">Выберите собеседника или группу</div>
-      </div>
-    );
-  }
 
   const menuMessage = menu ? messages.find((m) => m.id === menu.messageId) : null;
   const reactionMessage = reactionPicker
