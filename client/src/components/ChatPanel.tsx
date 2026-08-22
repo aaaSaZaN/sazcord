@@ -519,8 +519,17 @@ export default function ChatPanel({
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current += 1;
-    if (e.dataTransfer?.types?.includes('Files')) {
-      setIsDragging(true);
+    try {
+      const types = e.dataTransfer?.types;
+      if (
+        types &&
+        (Array.from(types).includes('Files') ||
+          (typeof (types as any).contains === 'function' && (types as any).contains('Files')))
+      ) {
+        setIsDragging(true);
+      }
+    } catch {
+      /* ignore */
     }
   };
 
@@ -566,7 +575,7 @@ export default function ChatPanel({
   const onAddReaction = async (emoji) => {
     if (!reactionPicker) return;
     const messageId = reactionPicker.messageId;
-    const groupId = isGroup ? group.id : undefined;
+    const groupId = isGroup ? group?.id : undefined;
 
     try {
       await api.addReaction(auth?.token, messageId, emoji, groupId);
@@ -578,7 +587,7 @@ export default function ChatPanel({
   };
 
   const onReactionClick = async (messageId, emoji, hasReacted) => {
-    const groupId = isGroup ? group.id : undefined;
+    const groupId = isGroup ? group?.id : undefined;
     try {
       await api.addReaction(auth?.token, messageId, emoji, groupId);
     } catch (err) {
@@ -586,13 +595,26 @@ export default function ChatPanel({
     }
   };
 
+  if (!peer && !group) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-4">
+        {onBack && (
+          <button className="btn-ghost md:hidden absolute top-4 left-4" onClick={onBack} aria-label="Назад">
+            <ArrowLeft size={18} />
+          </button>
+        )}
+        <div className="text-base font-medium">Выберите собеседника или группу</div>
+      </div>
+    );
+  }
+
   const menuMessage = menu ? messages.find((m) => m.id === menu.messageId) : null;
   const reactionMessage = reactionPicker
     ? messages.find((m) => m.id === reactionPicker.messageId)
     : null;
 
-  const displayName = isGroup ? group.name || 'Группа' : getDisplayName(peer);
-  const avatarUrl = isGroup ? group.avatarPath || null : getAvatarUrl(peer);
+  const displayName = isGroup ? group?.name || 'Группа' : getDisplayName(peer);
+  const avatarUrl = isGroup ? group?.avatarPath || null : getAvatarUrl(peer);
   // Удалённому аккаунту нельзя звонить и писать — история остаётся
   // read-only. Сами кнопки скрываем, а поле ввода делаем disabled.
   const peerDeleted = !isGroup && isDeletedUser(peer);
@@ -606,11 +628,11 @@ export default function ChatPanel({
   const subtitle =
     typingLabel ||
     (isGroup
-      ? `${group.members?.length || 0} участ.`
+      ? `${group?.members?.length || 0} участ.`
       : peerDeleted
         ? 'аккаунт удалён'
-        : (hasCustomDisplayName(peer) ? `@${peer.username} • ` : '') +
-          (peer.online ? 'в сети' : 'не в сети'));
+        : (hasCustomDisplayName(peer) ? `@${peer?.username} • ` : '') +
+          (peer?.online ? 'в сети' : 'не в сети'));
 
   return (
     <div
