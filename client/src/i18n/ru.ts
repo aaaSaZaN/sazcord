@@ -31,6 +31,7 @@ export const ru: Record<string, string> = {
   // --- Регистрация ---------------------------------------------------------
   'register.title': 'Регистрация',
   'register.rules': '3–24 символа: буквы, цифры, {chars}',
+  'register.repeatPassword': 'Повторите пароль',
   'register.submit': 'Создать аккаунт',
   'register.submitting': 'Создаём…',
   'register.error': 'Ошибка регистрации',

@@ -26,6 +26,7 @@ export const en: Record<string, string> = {
   // --- Sign up -------------------------------------------------------------
   'register.title': 'Sign up',
   'register.rules': '3–24 characters: letters, digits, {chars}',
+  'register.repeatPassword': 'Repeat password',
   'register.submit': 'Create account',
   'register.submitting': 'Creating…',
   'register.error': 'Sign-up failed',
