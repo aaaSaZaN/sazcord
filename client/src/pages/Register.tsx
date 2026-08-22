@@ -104,7 +104,7 @@ export default function Register() {
           <label className="text-sm text-slate-300">{t('common.password')}</label>
           <PasswordInput
             value={password}
-            onChange={setPassword}
+            onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
             autoComplete="new-password"
@@ -115,7 +115,7 @@ export default function Register() {
           <label className="text-sm text-slate-300">{t('register.repeatPassword')}</label>
           <PasswordInput
             value={password2}
-            onChange={setPassword2}
+            onChange={(e) => setPassword2(e.target.value)}
             required
             minLength={6}
             autoComplete="new-password"

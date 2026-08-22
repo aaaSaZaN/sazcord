@@ -4,7 +4,7 @@ import { Eye, EyeOff } from 'lucide-react';
 
 type PasswordInputProps = {
   value: string;
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onChange: ((event: ChangeEvent<HTMLInputElement>) => void) | ((value: string) => void);
   autoComplete?: string;
   minLength?: number;
   required?: boolean;
@@ -33,6 +33,8 @@ export default function PasswordInput({
   ariaLabel,
 }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
+  const displayValue = typeof value === 'string' ? value : '';
+
   return (
     <div className="relative">
       <input
@@ -40,8 +42,11 @@ export default function PasswordInput({
         name={name}
         type={visible ? 'text' : 'password'}
         className="input pr-10"
-        value={value}
-        onChange={onChange}
+        value={displayValue}
+        onChange={(e) => {
+          if (!onChange) return;
+          (onChange as any)(e);
+        }}
         autoComplete={autoComplete}
         minLength={minLength}
         required={required}

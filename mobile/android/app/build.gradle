@@ -34,6 +34,8 @@ android {
 
     signingConfigs {
         release {
+            v1SigningEnabled true
+            v2SigningEnabled true
             // Ключ лежит вне репозитория. Путь и пароли берём из
             // gradle.properties или переменных окружения — чтобы keystore
             // случайно не уехал в git.
