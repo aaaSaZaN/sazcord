@@ -119,9 +119,30 @@ export async function captureLocalMedia({ wantVideo = false, audioDeviceId = nul
   return tryGet(baseAudio);
 }
 
-// Пресеты для getDisplayMedia + setParameters на video sender'е.
-// max-bitrate подобран так, чтобы картинка оставалась читабельной
-// (текст не «разъезжался» при движении), но не забивал канал.
+export type ScreenResolution = 'source' | '4k' | '1440p' | '1080p' | '720p' | '480p';
+
+export type ScreenQualityConfig = {
+  resolution: ScreenResolution;
+  frameRate: number; // 15, 30, 60, 120
+  bitrateMbps: number; // 1 to 50+
+};
+
+export const RESOLUTION_PRESETS: Record<ScreenResolution, { width?: number; height?: number; label: string }> = {
+  source: { label: 'Оригинал' },
+  '4k': { width: 3840, height: 2160, label: '4K (2160p)' },
+  '1440p': { width: 2560, height: 1440, label: '2K (1440p)' },
+  '1080p': { width: 1920, height: 1080, label: '1080p (Full HD)' },
+  '720p': { width: 1280, height: 720, label: '720p (HD)' },
+  '480p': { width: 854, height: 480, label: '480p (SD)' },
+};
+
+export const DEFAULT_SCREEN_CONFIG: ScreenQualityConfig = {
+  resolution: '1080p',
+  frameRate: 60,
+  bitrateMbps: 12,
+};
+
+// Пресеты для обратной совместимости
 export const SCREEN_PRESETS = {
   '720p': { width: 1280, height: 720, frameRate: 30, maxBitrate: 2_500_000, label: '720p · 30fps' },
   '720p60': { width: 1280, height: 720, frameRate: 60, maxBitrate: 4_500_000, label: '720p · 60fps' },
@@ -133,21 +154,12 @@ export const SCREEN_PRESETS = {
 
 export const SCREEN_PRESET_KEYS = ['720p', '720p60', '1080p', '1080p60', '1440p', '1440p60'];
 
-export function getScreenPreset(key) {
-  return SCREEN_PRESETS[key] || SCREEN_PRESETS['720p'];
+export function getScreenPreset(key: string) {
+  return SCREEN_PRESETS[key] || SCREEN_PRESETS['1080p60'] || SCREEN_PRESETS['720p'];
 }
 
-// Захватить экран с выбранным пресетом. Chrome обычно отдаёт
-// разрешение источника «как есть», но ideal-поля подсказывают браузеру
-// верхнюю планку (иначе браузер может скипалировать вниз).
 /**
  * Поддерживается ли захват экрана в текущей среде.
- *
- * Android WebView НЕ реализует getDisplayMedia вообще (это не вопрос
- * разрешений — метода просто нет в navigator.mediaDevices). Нативный
- * захват там делается через MediaProjection API, что требует отдельного
- * моста в Kotlin/Java на стороне обёртки. Пока его нет — честно прячем
- * кнопку, а не роняем звонок непонятной ошибкой.
  */
 export function canShareScreen(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -155,17 +167,33 @@ export function canShareScreen(): boolean {
   return !!md && typeof md.getDisplayMedia === 'function';
 }
 
-export async function captureDisplay(presetKey, includeAudio = false) {
+export async function captureDisplay(
+  configOrPreset: string | ScreenQualityConfig = '1080p60',
+  includeAudio = false,
+) {
   if (!canShareScreen()) {
     throw new Error(
       'Демонстрация экрана недоступна в этой версии приложения. ' +
         'Открой Sazcord в браузере или в десктоп-клиенте.',
     );
   }
-  const preset = getScreenPreset(presetKey);
-  // Если просим аудио — задаём «studio»-настройки. Применять
-  // echoCancellation/noiseSuppression к системному звуку нельзя, иначе
-  // музыка и эффекты будут «жёванные».
+
+  let width: number | undefined;
+  let height: number | undefined;
+  let frameRate = 60;
+
+  if (typeof configOrPreset === 'string') {
+    const preset = getScreenPreset(configOrPreset);
+    width = preset.width;
+    height = preset.height;
+    frameRate = preset.frameRate;
+  } else if (configOrPreset && typeof configOrPreset === 'object') {
+    const resInfo = RESOLUTION_PRESETS[configOrPreset.resolution] || RESOLUTION_PRESETS['1080p'];
+    width = resInfo.width;
+    height = resInfo.height;
+    frameRate = configOrPreset.frameRate || 60;
+  }
+
   const audio = includeAudio
     ? {
         echoCancellation: false,
@@ -176,16 +204,18 @@ export async function captureDisplay(presetKey, includeAudio = false) {
       }
     : false;
 
+  const videoConstraints: any = {
+    frameRate: { ideal: frameRate, max: frameRate },
+  };
+  if (width && height) {
+    videoConstraints.width = { ideal: width, max: width };
+    videoConstraints.height = { ideal: height, max: height };
+  }
+
   /** @type {any} */
   const constraints = {
-    video: {
-      width: { ideal: preset.width },
-      height: { ideal: preset.height },
-      frameRate: { ideal: preset.frameRate, max: preset.frameRate },
-    },
+    video: videoConstraints,
     audio,
-    // Исключаем окно самого Sazcord из захвата звука/поверхности, чтобы
-    // не было эха голосов собеседников
     selfBrowserSurface: 'exclude',
     surfaceSwitching: 'include',
     systemAudio: includeAudio ? 'include' : 'exclude',
@@ -513,25 +543,38 @@ async function attachProcessAudioToDisplay(displayStream) {
   });
 }
 
-// Применить maxBitrate к video sender'у. Без этого WebRTC берёт
-// дефолтные ~2–4 Mbps — для 1080p и 1440p это мыло.
-export async function applyVideoSenderQuality(sender, presetKey) {
+// Применить maxBitrate и maxFramerate к video sender'у.
+export async function applyVideoSenderQuality(
+  sender: RTCRtpSender | null,
+  configOrPreset: string | ScreenQualityConfig = '1080p60',
+) {
   if (!sender) return;
-  const preset = getScreenPreset(presetKey);
+  let maxBitrate = 12_000_000;
+  let frameRate = 60;
+
+  if (typeof configOrPreset === 'string') {
+    const preset = getScreenPreset(configOrPreset);
+    maxBitrate = preset.maxBitrate;
+    frameRate = preset.frameRate;
+  } else if (configOrPreset && typeof configOrPreset === 'object') {
+    maxBitrate = Math.round((configOrPreset.bitrateMbps || 12) * 1_000_000);
+    frameRate = configOrPreset.frameRate || 60;
+  }
+
   try {
     const params = sender.getParameters();
     if (!params.encodings || !params.encodings.length) {
       params.encodings = [{}];
     }
     for (const enc of params.encodings) {
-      enc.maxBitrate = preset.maxBitrate;
-      enc.maxFramerate = preset.frameRate;
+      enc.maxBitrate = maxBitrate;
+      enc.maxFramerate = frameRate;
     }
     if ('degradationPreference' in params) {
       params.degradationPreference = 'maintain-resolution';
     }
     await sender.setParameters(params);
-  } catch {
-    /* не критично */
+  } catch (err) {
+    console.warn('Failed to apply video sender quality:', err);
   }
 }

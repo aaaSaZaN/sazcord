@@ -7,6 +7,8 @@ import {
   applyVideoSenderQuality,
   createPlaceholderAudioTrack,
   createPlaceholderVideoTrack,
+  RESOLUTION_PRESETS,
+  type ScreenQualityConfig,
 } from '../utils/media';
 import {
   createMicPipeline,
@@ -1254,7 +1256,7 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
         setLocal(new MediaStream(s.getTracks()));
 
         await videoSenderRef.current.replaceTrack(track);
-        // Поднять maxBitrate под выбранный пресет.
+        // Применить битрейт и FPS под выбранную конфигурацию/пресет.
         await applyVideoSenderQuality(videoSenderRef.current, presetKey);
         // Renegotiate, чтобы пир получил свежий SDP с правильными
         // codec/resolution параметрами и сразу — keyframe.
@@ -1319,6 +1321,30 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
       }
     },
     [cameraOn, emitMyMedia, renegotiate, setLocal, sharingScreen, toast, turnOffVideoSender],
+  );
+
+  const setScreenQuality = useCallback(
+    async (newConfig: ScreenQualityConfig) => {
+      if (videoSenderRef.current && sharingScreen) {
+        await applyVideoSenderQuality(videoSenderRef.current, newConfig);
+      }
+      if (screenTrackRef.current?.applyConstraints) {
+        const resInfo = RESOLUTION_PRESETS[newConfig.resolution];
+        const trackConstraints: MediaTrackConstraints = {
+          frameRate: { ideal: newConfig.frameRate, max: newConfig.frameRate },
+        };
+        if (resInfo?.width && resInfo?.height) {
+          trackConstraints.width = { ideal: resInfo.width, max: resInfo.width };
+          trackConstraints.height = { ideal: resInfo.height, max: resInfo.height };
+        }
+        try {
+          await screenTrackRef.current.applyConstraints(trackConstraints);
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [sharingScreen],
   );
 
   // --- Обработка сигналинга ---------------------------------------------
@@ -1807,6 +1833,7 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
     toggleDeafen,
     toggleCamera,
     toggleScreenShare,
+    setScreenQuality,
   };
 }
 

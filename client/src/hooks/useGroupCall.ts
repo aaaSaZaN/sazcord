@@ -6,6 +6,8 @@ import {
   applyVideoSenderQuality,
   createPlaceholderAudioTrack,
   createPlaceholderVideoTrack,
+  RESOLUTION_PRESETS,
+  type ScreenQualityConfig,
 } from '../utils/media';
 import {
   createMicPipeline,
@@ -1173,6 +1175,32 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
     [applyLocalTracksToPc, deafened, emitMyMedia, renegotiatePeer, sharingScreen, toast],
   );
 
+  const setScreenQuality = useCallback(
+    async (newConfig: ScreenQualityConfig) => {
+      for (const pc of pcsRef.current.values()) {
+        if (pc.__videoSender && sharingScreen) {
+          await applyVideoSenderQuality(pc.__videoSender, newConfig);
+        }
+      }
+      if (screenTrackRef.current?.applyConstraints) {
+        const resInfo = RESOLUTION_PRESETS[newConfig.resolution];
+        const trackConstraints: MediaTrackConstraints = {
+          frameRate: { ideal: newConfig.frameRate, max: newConfig.frameRate },
+        };
+        if (resInfo?.width && resInfo?.height) {
+          trackConstraints.width = { ideal: resInfo.width, max: resInfo.width };
+          trackConstraints.height = { ideal: resInfo.height, max: resInfo.height };
+        }
+        try {
+          await screenTrackRef.current.applyConstraints(trackConstraints);
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [sharingScreen],
+  );
+
   // --- signaling handlers -----------------------------------------------
   useEffect(() => {
     if (!socket) return undefined;
@@ -1650,5 +1678,6 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
     toggleDeafen,
     toggleCamera,
     toggleScreenShare,
+    setScreenQuality,
   };
 }

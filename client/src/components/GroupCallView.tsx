@@ -16,6 +16,7 @@ import {
   X,
   Maximize2,
   Minimize2,
+  Sliders,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import ScreenQualityModal from './ScreenQualityModal';
@@ -523,16 +524,29 @@ export default function GroupCallView({
         )}
         {/* См. CallView: в Android WebView getDisplayMedia отсутствует. */}
         {canShareScreen() && (
-          <ToolButton
-            onClick={() => {
-              if (sharingScreen) toggleScreenShare();
-              else setQualityOpen(true);
-            }}
-            active={sharingScreen}
-            title={sharingScreen ? 'Остановить демонстрацию экрана' : 'Начать демонстрацию экрана'}
-          >
-            {sharingScreen ? <ScreenShareOff size={20} /> : <ScreenShare size={20} />}
-          </ToolButton>
+          <div className="relative inline-flex items-center">
+            <ToolButton
+              onClick={() => {
+                if (sharingScreen) toggleScreenShare();
+                else setQualityOpen(true);
+              }}
+              active={sharingScreen}
+              activeDanger={sharingScreen}
+              title={sharingScreen ? 'Остановить демонстрацию экрана' : 'Начать демонстрацию экрана'}
+            >
+              {sharingScreen ? <ScreenShareOff size={20} /> : <ScreenShare size={20} />}
+            </ToolButton>
+            {sharingScreen && (
+              <button
+                type="button"
+                onClick={() => setQualityOpen(true)}
+                className="interactive-scale absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-accent text-white border border-white/20 flex items-center justify-center shadow-md hover:scale-110"
+                title="Настроить битрейт/FPS на лету"
+              >
+                <Sliders size={11} />
+              </button>
+            )}
+          </div>
         )}
         <ToolButton onClick={() => setSettingsOpen(true)} title="Настройки">
           <Settings size={20} />
@@ -552,11 +566,18 @@ export default function GroupCallView({
       </Suspense>
       <ScreenQualityModal
         open={qualityOpen}
-        defaultPreset={settings.screenQuality || '720p'}
+        isLive={sharingScreen}
         onClose={() => setQualityOpen(false)}
-        onConfirm={(preset, includeAudio) => {
+        onLiveUpdate={(cfg) => {
+          call.setScreenQuality?.(cfg);
+        }}
+        onConfirm={(config, includeAudio) => {
           setQualityOpen(false);
-          toggleScreenShare(preset, includeAudio);
+          if (sharingScreen) {
+            call.setScreenQuality?.(config);
+          } else {
+            toggleScreenShare(config, includeAudio);
+          }
         }}
       />
 

@@ -129,7 +129,8 @@ app.use(
 // stun:host:port. Пустое значение = вообще без STUN: осмысленно только
 // когда задан TURN и весь трафик всё равно идёт через него.
 const STUN_URLS = (
-  process.env.STUN_URLS ?? 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302'
+  process.env.STUN_URLS ??
+  'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302,stun:stun.cloudflare.com:3478,stun:openrelay.metered.ca:80'
 )
   .split(',')
   .map((s) => s.trim())
@@ -138,9 +139,13 @@ const STUN_URLS = (
 // Отдаём ICE-серверы клиенту, чтобы секреты TURN не хранились во фронте.
 app.get('/api/ice', (_req, res) => {
   const iceServers = STUN_URLS.length ? [{ urls: STUN_URLS }] : [];
-  if (process.env.TURN_URL) {
+  if (process.env.TURN_URL || process.env.TURN_URLS) {
+    const turnUrls = (process.env.TURN_URLS || process.env.TURN_URL)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     iceServers.push({
-      urls: process.env.TURN_URL,
+      urls: turnUrls,
       username: process.env.TURN_USERNAME || undefined,
       credential: process.env.TURN_PASSWORD || undefined,
     });
