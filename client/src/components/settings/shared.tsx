@@ -4,6 +4,7 @@
 // когда табы будут в собственных файлах.
 
 import type { CSSProperties, ReactNode } from 'react';
+import { Check } from 'lucide-react';
 
 // Подписи для статусов permissions API. Раньше были в AudioTab,
 // но логически они общие — оставим тут вместе с PermissionRow,
@@ -36,6 +37,7 @@ export function PermissionRow({
   busy: boolean;
   onRequest: () => void;
 }) {
+  const isGranted = status === 'granted';
   const label = PERMISSION_TEXT[status] || PERMISSION_TEXT.unknown;
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-2.5">
@@ -47,15 +49,20 @@ export function PermissionRow({
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <span className={`text-xs tabular-nums ${permissionClass(status)}`}>{label}</span>
-        <button
-          type="button"
-          className="btn-ghost h-8 px-2 text-xs disabled:opacity-50"
-          onClick={onRequest}
-          disabled={busy}
-        >
-          {busy ? '…' : 'Разрешить'}
-        </button>
+        <span className={`text-xs tabular-nums flex items-center gap-1 font-medium ${permissionClass(status)}`}>
+          {isGranted && <Check size={14} className="text-emerald-400" />}
+          {label}
+        </span>
+        {!isGranted && (
+          <button
+            type="button"
+            className="btn-ghost h-8 px-2.5 text-xs disabled:opacity-50"
+            onClick={onRequest}
+            disabled={busy}
+          >
+            {busy ? '…' : 'Разрешить'}
+          </button>
+        )}
       </div>
     </div>
   );

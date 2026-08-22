@@ -22,16 +22,28 @@ import { useEffect, useState } from 'react';
 import { Power, MinusSquare, ShieldAlert } from 'lucide-react';
 import { ToggleRow } from './shared';
 import { useToast } from '../../context/ToastContext';
-import { isDesktop, relaunchAsAdmin } from '../../utils/desktop';
+import { isDesktop, relaunchAsAdmin, getDesktopPlatform } from '../../utils/desktop';
 
 export function AppTab() {
   const toast = useToast();
   const [autoStart, setAutoStart] = useState(false);
   const [closeToTray, setCloseToTray] = useState(true);
-  // loaded: ждём первого getConfig() прежде чем разрешить toggle'и —
-  // иначе пользователь успеет щёлкнуть по умолчанию, и его реальное
-  // значение перетрётся.
   const [loaded, setLoaded] = useState(false);
+
+  const platform = getDesktopPlatform();
+  const isMac = platform === 'darwin' || (/Mac|iPhone|iPad/i.test(navigator.platform || '') && !platform);
+  const isLinux = platform === 'linux';
+  const isWin = platform === 'win32' || (!isMac && !isLinux);
+
+  const autoStartTitle = isMac
+    ? 'Запускать при входе в macOS'
+    : isLinux
+      ? 'Запускать при старте системы'
+      : 'Запускать при старте Windows';
+
+  const autoStartDesc = isMac
+    ? 'Приложение будет автоматически запускаться при входе пользователя в систему.'
+    : 'Приложение будет автоматически запускаться при входе в систему и работать в фоне. Удобно, чтобы не пропускать звонки и сообщения.';
 
   useEffect(() => {
     if (!isDesktop()) {
@@ -45,8 +57,6 @@ export function AppTab() {
         if (cancelled) return;
         if (cfg) {
           setAutoStart(!!cfg.autoStart);
-          // closeToTray: дефолт true, undefined считаем как true (старые
-          // профили без этого поля должны получить новое поведение).
           setCloseToTray(cfg.closeToTray !== false);
         }
       } catch (e) {
@@ -80,22 +90,15 @@ export function AppTab() {
     updateCfg({ closeToTray: v });
   };
 
-  // Run-as-admin: defensive busy-flag, чтобы юзер не нажал кнопку
-  // дважды и не получил два UAC-prompt'а подряд. После 800 мс main-
-  // процесс закроется сам, и весь UI исчезнет вместе с этим стейтом.
   const [restartBusy, setRestartBusy] = useState(false);
   const onRestartAsAdmin = async () => {
     if (restartBusy) return;
     setRestartBusy(true);
     const result = await relaunchAsAdmin();
     if (!result.ok) {
-      // Если ok=true — приложение через ~800 мс закроется само, и юзер
-      // увидит UAC-prompt; никаких toast'ов показывать не нужно.
       toast.error?.('Не удалось перезапустить: ' + (result.error || 'неизвестная ошибка'));
       setRestartBusy(false);
     }
-    // Безопасный fallback: если quit не случился через 3 с (юзер отказался
-    // от UAC, новый процесс не запустился, и main передумал quit'ить), разблокируем кнопку.
     setTimeout(() => setRestartBusy(false), 3000);
   };
 
@@ -104,8 +107,8 @@ export function AppTab() {
       <div className="rounded-xl border border-border bg-bg-2 p-4 space-y-4">
         <ToggleRow
           icon={<Power size={18} />}
-          title="Запускать при старте Windows"
-          description="Приложение будет автоматически запускаться при входе в систему и сворачиваться в трей. Удобно, чтобы не пропускать звонки и сообщения сразу после загрузки ПК."
+          title={autoStartTitle}
+          description={autoStartDesc}
           checked={autoStart}
           onChange={onAutoStartChange}
           disabled={!loaded}
@@ -113,38 +116,44 @@ export function AppTab() {
         <div className="h-px bg-border" />
         <ToggleRow
           icon={<MinusSquare size={18} />}
-          title="Сворачивать в трей при закрытии"
-          description="Крестик скрывает окно в трей вместо завершения приложения — звонки и уведомления продолжают работать в фоне. Чтобы выйти полностью, используйте «Выход» в меню трея."
+          title={isMac ? 'Оставаться в фоне при закрытии окна' : 'Сворачивать в трей при закрытии'}
+          description={
+            isMac
+              ? 'Крестик закрывает окно, но оставляет приложение активным в строке меню — звонки и уведомления продолжают работать.'
+              : 'Крестик скрывает окно в трей вместо завершения приложения — звонки и уведомления продолжают работать в фоне. Чтобы выйти полностью, используйте «Выход» в меню трея.'
+          }
           checked={closeToTray}
           onChange={onCloseToTrayChange}
           disabled={!loaded}
         />
-        <div className="h-px bg-border" />
-        {/* Run-as-admin — стилизовано под ToggleRow, но вместо тогла — кнопка,
-            потому что elevation нельзя хранить в состоянии; это всегда action «сейчас же». */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="opacity-70 shrink-0">
-              <ShieldAlert size={18} />
-            </span>
-            <div className="min-w-0">
-              <div className="text-sm">Перезапустить от имени администратора</div>
-              <div className="text-xs text-slate-500">
-                Нужно, если хоткеи не работают в играх с античитами
-                (Battleye/EAC/Vanguard). Windows покажет UAC-окно
-                подтверждения. Текущая сессия будет закрыта.
+        {isWin && (
+          <>
+            <div className="h-px bg-border" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="opacity-70 shrink-0">
+                  <ShieldAlert size={18} />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm">Перезапустить от имени администратора</div>
+                  <div className="text-xs text-slate-500">
+                    Нужно, если хоткеи не работают в играх с античитами
+                    (Battleye/EAC/Vanguard). Windows покажет UAC-окно
+                    подтверждения. Текущая сессия будет закрыта.
+                  </div>
+                </div>
               </div>
+              <button
+                type="button"
+                className="btn-ghost h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50"
+                onClick={onRestartAsAdmin}
+                disabled={restartBusy || !loaded}
+              >
+                {restartBusy ? '…' : 'Перезапустить'}
+              </button>
             </div>
-          </div>
-          <button
-            type="button"
-            className="btn-ghost h-8 px-3 text-xs whitespace-nowrap disabled:opacity-50"
-            onClick={onRestartAsAdmin}
-            disabled={restartBusy || !loaded}
-          >
-            {restartBusy ? '…' : 'Перезапустить'}
-          </button>
-        </div>
+          </>
+        )}
       </div>
     </section>
   );

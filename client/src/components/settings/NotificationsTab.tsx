@@ -151,14 +151,16 @@ function PushBlock({
   onToggle: (v: boolean) => void;
 }) {
   if (!pushSupported()) {
+    const isIos = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
     return (
       <div className="rounded-lg border border-border bg-bg-2 p-3 text-sm text-slate-400">
         <div className="flex items-center gap-2 mb-1">
           <Smartphone size={16} />
           <span className="font-medium text-slate-200">Системные уведомления</span>
         </div>
-        Ваш браузер не поддерживает Web Push. На iOS Safari это работает только в режиме PWA
-        (Добавить на главный экран).
+        {isIos
+          ? 'На iOS Safari системные push-уведомления работают в режиме PWA (меню «Поделиться» → «На экран “Домой”»).'
+          : 'Текущее окружение не поддерживает Web Push напрямую. Используйте современный браузер (Chrome / Safari) или режим PWA.'}
       </div>
     );
   }

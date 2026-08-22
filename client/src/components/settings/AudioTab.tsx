@@ -107,13 +107,19 @@ export function AudioTab() {
       queryPermission('camera'),
     ]);
 
+    // Проверяем сохраненное состояние из localStorage
+    const savedMic = typeof localStorage !== 'undefined' ? localStorage.getItem('sazcord.perm.microphone') : null;
+    const savedCam = typeof localStorage !== 'undefined' ? localStorage.getItem('sazcord.perm.camera') : null;
+    if (savedMic === 'granted' && microphone !== 'denied') microphone = 'granted';
+    if (savedCam === 'granted' && camera !== 'denied') camera = 'granted';
+
     // Если queryPermission вернул prompt/unknown, проверяем наличие labels у устройств:
     // браузер раскрывает имена устройств только при выданных правах.
     try {
       if (navigator.mediaDevices?.enumerateDevices) {
         const devs = await navigator.mediaDevices.enumerateDevices();
-        const hasAudioLabel = devs.some((d) => d.kind === 'audioinput' && d.label);
-        const hasVideoLabel = devs.some((d) => d.kind === 'videoinput' && d.label);
+        const hasAudioLabel = devs.some((d) => d.kind === 'audioinput' && Boolean(d.label));
+        const hasVideoLabel = devs.some((d) => d.kind === 'videoinput' && Boolean(d.label));
         if (hasAudioLabel) microphone = 'granted';
         if (hasVideoLabel) camera = 'granted';
       }
@@ -121,10 +127,17 @@ export function AudioTab() {
       /* ignore */
     }
 
-    setPermissions((prev) => ({
-      microphone: microphone !== 'unknown' ? microphone : prev.microphone,
-      camera: camera !== 'unknown' ? camera : prev.camera,
-    }));
+    if (microphone === 'granted' && typeof localStorage !== 'undefined') {
+      localStorage.setItem('sazcord.perm.microphone', 'granted');
+    }
+    if (camera === 'granted' && typeof localStorage !== 'undefined') {
+      localStorage.setItem('sazcord.perm.camera', 'granted');
+    }
+
+    setPermissions({
+      microphone,
+      camera,
+    });
   };
 
   useEffect(() => {
@@ -150,14 +163,20 @@ export function AudioTab() {
     try {
       if (kind === 'microphone') {
         stream = await mediaDevices.getUserMedia({ audio: true });
+        if (typeof localStorage !== 'undefined') localStorage.setItem('sazcord.perm.microphone', 'granted');
         setPermissions((prev) => ({ ...prev, microphone: 'granted' }));
         toast.success('Доступ к микрофону разрешён');
       } else if (kind === 'camera') {
         stream = await mediaDevices.getUserMedia({ video: true });
+        if (typeof localStorage !== 'undefined') localStorage.setItem('sazcord.perm.camera', 'granted');
         setPermissions((prev) => ({ ...prev, camera: 'granted' }));
         toast.success('Доступ к камере разрешён');
       } else if (kind === 'media') {
         stream = await mediaDevices.getUserMedia({ audio: true, video: true });
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('sazcord.perm.microphone', 'granted');
+          localStorage.setItem('sazcord.perm.camera', 'granted');
+        }
         setPermissions({ microphone: 'granted', camera: 'granted' });
         toast.success('Доступ к микрофону и камере разрешён');
       }
@@ -167,9 +186,13 @@ export function AudioTab() {
     } catch (err: any) {
       stopMediaStream(stream);
       const denied = err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
+      if (denied && typeof localStorage !== 'undefined') {
+        if (kind === 'microphone' || kind === 'media') localStorage.removeItem('sazcord.perm.microphone');
+        if (kind === 'camera' || kind === 'media') localStorage.removeItem('sazcord.perm.camera');
+      }
       setPermissionError(
         denied
-          ? 'Разрешение отклонено. Если браузер запомнил отказ, включите доступ в настройках сайта.'
+          ? 'Разрешение отклонено. Если браузер запомнил отказ, включите доступ в настройках устройства/сайта.'
           : err?.message || 'Не удалось запросить разрешение.',
       );
       await refreshPermissions();
@@ -478,14 +501,16 @@ export function AudioTab() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="btn-primary h-9 px-3 text-xs disabled:opacity-50"
-            onClick={() => requestPermission('media')}
-            disabled={!!permissionBusy}
-          >
-            {permissionBusy === 'media' ? 'Запрашиваем…' : 'Разрешить микрофон и камеру'}
-          </button>
+          {!(permissions.microphone === 'granted' && permissions.camera === 'granted') && (
+            <button
+              type="button"
+              className="btn-primary h-9 px-3 text-xs disabled:opacity-50"
+              onClick={() => requestPermission('media')}
+              disabled={!!permissionBusy}
+            >
+              {permissionBusy === 'media' ? 'Запрашиваем…' : 'Разрешить микрофон и камеру'}
+            </button>
+          )}
           <button
             type="button"
             className="btn-ghost h-9 px-3 text-xs"
@@ -496,7 +521,7 @@ export function AudioTab() {
             disabled={!!permissionBusy}
           >
             <RefreshCw size={12} className="mr-1" />
-            Обновить
+            Обновить устройства
           </button>
         </div>
         {permissionError && <div className="text-xs text-amber-300">{permissionError}</div>}
