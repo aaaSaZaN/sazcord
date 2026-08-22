@@ -4,6 +4,7 @@ import Register from './pages/Register';
 import Invite from './pages/Invite';
 import Home from './pages/Home';
 import { useAuth } from './context/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function Guard({ children }) {
   const { auth, ready } = useAuth();
@@ -23,40 +24,42 @@ function GuestOnly({ children }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={
-          <GuestOnly>
-            <Login />
-          </GuestOnly>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <GuestOnly>
-            <Register />
-          </GuestOnly>
-        }
-      />
-      <Route
-        path="/invite/:code"
-        element={
-          <GuestOnly>
-            <Invite />
-          </GuestOnly>
-        }
-      />
-      <Route
-        path="/"
-        element={
-          <Guard>
-            <Home />
-          </Guard>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <GuestOnly>
+              <Login />
+            </GuestOnly>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <GuestOnly>
+              <Register />
+            </GuestOnly>
+          }
+        />
+        <Route
+          path="/invite/:code"
+          element={
+            <GuestOnly>
+              <Invite />
+            </GuestOnly>
+          }
+        />
+        <Route
+          path="/"
+          element={
+            <Guard>
+              <Home />
+            </Guard>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ErrorBoundary>
   );
 }

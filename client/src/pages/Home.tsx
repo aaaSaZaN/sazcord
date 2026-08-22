@@ -29,6 +29,7 @@ import IncomingCallModal from '../components/IncomingCallModal';
 import ContextMenu from '../components/ContextMenu';
 import Avatar from '../components/Avatar';
 import GroupCallView from '../components/GroupCallView';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { useCall } from '../hooks/useCall';
 import { useGroupCall } from '../hooks/useGroupCall';
 import { useSounds } from '../hooks/useSounds';
@@ -1357,44 +1358,46 @@ export default function Home() {
             как callSlot — он рендерится СРАЗУ ПОД хедером (имя+кнопки),
             ВЫШЕ списка сообщений. Это и есть «дискорд-стайл» из
             фидбека: ник наверху, звонок под ним, чат ещё ниже. */}
-        <ChatPanel
-          peer={selectedUser}
-          group={selectedGroup}
-          messages={messages}
-          selfId={selfUser.id}
-          loading={loadingMessages && messages.length === 0}
-          onSend={handleSend}
-          onSendVoice={handleSendVoice}
-          onSendFile={handleSendFile}
-          onEditMessage={handleEditMessage}
-          onDeleteMessage={handleDeleteMessage}
-          onRequestForward={handleRequestForward}
-          onRejoinCall={handleRejoinCall}
-          onCallAudio={() => handleCallAudio()}
-          onCallVideo={() => handleCallVideo()}
-          onStartGroupCall={handleStartGroupCall}
-          onJoinGroupCall={handleStartGroupCall}
-          onTypingChange={handleTypingChange}
-          typingUsers={typingUsers}
-          groupCallActive={selectedGroup ? activeGroupCalls.has(selectedGroup.id) : false}
-          inGroupCall={
-            groupCall.state !== 'idle' && selectedGroup && groupCall.group?.id === selectedGroup.id
-          }
-          onBack={() => setSidebarOpen(true)}
-          onShowProfile={(id) => setProfileId(id)}
-          onShowGroupSettings={openEditGroup}
-          onShowGroupMemberProfile={(id) => setProfileId(id)}
-          firstUnreadId={firstUnreadId}
-          maxFileBytes={maxUploadBytes}
-          usersById={usersById}
-          callSlot={
-            callInThisChat ? (
-              <CallView call={call} embedded selfUser={selfUser} />
-            ) : groupCallInThisChat ? (
-              <GroupCallView call={groupCall} usersById={usersById} selfId={selfUser.id} embedded />
-            ) : null
-          }
-        />
+        <ErrorBoundary fallbackTitle="Ошибка отображения чата">
+          <ChatPanel
+            peer={selectedUser}
+            group={selectedGroup}
+            messages={messages}
+            selfId={selfUser.id}
+            loading={loadingMessages && messages.length === 0}
+            onSend={handleSend}
+            onSendVoice={handleSendVoice}
+            onSendFile={handleSendFile}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onRequestForward={handleRequestForward}
+            onRejoinCall={handleRejoinCall}
+            onCallAudio={() => handleCallAudio()}
+            onCallVideo={() => handleCallVideo()}
+            onStartGroupCall={handleStartGroupCall}
+            onJoinGroupCall={handleStartGroupCall}
+            onTypingChange={handleTypingChange}
+            typingUsers={typingUsers}
+            groupCallActive={selectedGroup ? activeGroupCalls.has(selectedGroup.id) : false}
+            inGroupCall={
+              groupCall.state !== 'idle' && selectedGroup && groupCall.group?.id === selectedGroup.id
+            }
+            onBack={() => setSidebarOpen(true)}
+            onShowProfile={(id) => setProfileId(id)}
+            onShowGroupSettings={openEditGroup}
+            onShowGroupMemberProfile={(id) => setProfileId(id)}
+            firstUnreadId={firstUnreadId}
+            maxFileBytes={maxUploadBytes}
+            usersById={usersById}
+            callSlot={
+              callInThisChat ? (
+                <CallView call={call} embedded selfUser={selfUser} />
+              ) : groupCallInThisChat ? (
+                <GroupCallView call={groupCall} usersById={usersById} selfId={selfUser.id} embedded />
+              ) : null
+            }
+          />
+        </ErrorBoundary>
       </main>
 
       {/* Контекстное меню юзера в сайдбаре */}

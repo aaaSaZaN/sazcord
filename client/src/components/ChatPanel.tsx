@@ -667,8 +667,8 @@ export default function ChatPanel({
         <button
           className="interactive-scale flex items-center gap-3 min-w-0 text-left shrink-0 rounded-xl p-1.5 -m-1.5"
           onClick={() => {
-            if (isGroup) onShowGroupSettings?.(group.id);
-            else onShowProfile?.(peer.id);
+            if (isGroup) onShowGroupSettings?.(group?.id);
+            else if (peer?.id) onShowProfile?.(peer.id);
           }}
           title={isGroup ? 'Настройки группы' : 'Открыть профиль'}
         >
@@ -685,7 +685,7 @@ export default function ChatPanel({
               name={displayName}
               src={avatarUrl}
               size={38}
-              online={isGroup ? undefined : peer.online}
+              online={isGroup ? undefined : peer?.online}
               showStatus={!isGroup}
             />
           )}
@@ -732,7 +732,7 @@ export default function ChatPanel({
               <button
                 className="btn-icon bg-white/5 hover:bg-white/10 text-slate-100"
                 style={{ width: 36, height: 36 }}
-                onClick={() => onShowGroupSettings?.(group.id)}
+                onClick={() => onShowGroupSettings?.(group?.id)}
                 title="Настройки группы"
                 type="button"
               >
@@ -741,21 +741,11 @@ export default function ChatPanel({
             </>
           ) : peerDeleted ? null : (
             <>
-              {/* Оффлайн-пир НЕ блокирует звонок.
-                  Раньше тут стоял disabled={!peer.online}, и кнопки в шапке
-                  были мертвы, хотя ровно тот же звонок спокойно уходил из
-                  модалки профиля (там гейта нет) — то есть кнопка ничего не
-                  защищала, просто путала.
-                  На сервере звонок оффлайн-пиру полностью поддержан:
-                  call:invite шлёт ему Web Push и пишет системное сообщение
-                  в чат, а если никто не ответил за 30 секунд —
-                  callRegistry финализирует звонок как «пропущенный» и
-                  закрывает окно у звонящего. Ровно как в Discord. */}
               <button
                 className="btn-icon bg-white/5 hover:bg-white/10 text-slate-100 disabled:opacity-40"
                 style={{ width: 36, height: 36 }}
                 onClick={onCallAudio}
-                title={peer.online ? 'Голосовой звонок' : 'Позвонить (пользователь не в сети)'}
+                title={peer?.online ? 'Голосовой звонок' : 'Позвонить (пользователь не в сети)'}
                 type="button"
               >
                 <Phone size={16} />
@@ -764,7 +754,7 @@ export default function ChatPanel({
                 className="btn-icon bg-white/5 hover:bg-white/10 text-slate-100 disabled:opacity-40"
                 style={{ width: 36, height: 36 }}
                 onClick={onCallVideo}
-                title={peer.online ? 'Видео-звонок' : 'Видеозвонок (пользователь не в сети)'}
+                title={peer?.online ? 'Видео-звонок' : 'Видеозвонок (пользователь не в сети)'}
                 type="button"
               >
                 <Video size={16} />
@@ -977,8 +967,8 @@ export default function ChatPanel({
                   : pendingAttachments.length > 0
                     ? 'Добавьте текст или отправьте…'
                     : isGroup
-                      ? `Сообщение в «${group.name}»`
-                      : `Сообщение для @${peer.username}`
+                      ? `Сообщение в «${group?.name || 'группу'}»`
+                      : `Сообщение для @${peer?.username || ''}`
               }
               value={text}
               onChange={onTextChange}

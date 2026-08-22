@@ -28,7 +28,16 @@ export default function AttachmentMessage({ message, mine }: { message: any; min
 
   if (!attachmentPath) return null;
 
-  const additionalAttachments = payload?.additionalAttachments || [];
+  let additionalAttachments: AttachmentItem[] = [];
+  try {
+    const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    if (Array.isArray(parsed?.additionalAttachments)) {
+      additionalAttachments = parsed.additionalAttachments;
+    }
+  } catch {
+    /* ignore */
+  }
+
   const allAttachments: AttachmentItem[] = [
     {
       kind,
