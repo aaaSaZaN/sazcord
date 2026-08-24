@@ -1672,11 +1672,17 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
         let totalBytesOut = 0;
         let proto: string | null = null;
         let codecName: string | null = null;
+        let pairLocalId: string | null = null;
+        let pairRemoteId: string | null = null;
 
         report.forEach((stat: any) => {
           if (stat.type === 'candidate-pair' && (stat.nominated || stat.state === 'succeeded' || stat.selected)) {
             if (typeof stat.currentRoundTripTime === 'number') {
               pingMs = Math.round(stat.currentRoundTripTime * 1000);
+            }
+            if (stat.nominated || stat.selected) {
+              pairLocalId = typeof stat.localCandidateId === 'string' ? stat.localCandidateId : null;
+              pairRemoteId = typeof stat.remoteCandidateId === 'string' ? stat.remoteCandidateId : null;
             }
           }
           if (stat.type === 'inbound-rtp' && stat.kind === 'audio') {
@@ -1712,6 +1718,16 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
           else quality = 'poor';
         }
 
+        // Реальные адреса выбранной ICE-пары — чтобы на вопрос «почему
+        // такой пинг» можно было увидеть, куда физически уходит медиа.
+        const describeCandidate = (id: string | null): string | null => {
+          if (!id) return null;
+          const c: any = report.get(id);
+          if (!c || !c.candidateType) return null;
+          const addr = c.address || c.ip || '?';
+          return `${c.candidateType} ${addr}${c.protocol ? `/${c.protocol}` : ''}`;
+        };
+
         setStats({
           ping: pingMs,
           packetLoss: lossPercent,
@@ -1720,6 +1736,8 @@ export function useCall({ socket, selfUser, settings, toast, sounds }) {
           bitrateOutKbps: bitrateOut,
           codec: codecName || 'opus',
           protocol: proto,
+          routeLocal: describeCandidate(pairLocalId),
+          routeRemote: describeCandidate(pairRemoteId),
         });
       } catch {
         /* ignore */

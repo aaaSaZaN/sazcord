@@ -83,4 +83,7 @@ configurations.configureEach {
 dependencies {
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "androidx.core:core:1.13.1"
+    // WebSocket для CallListenerService: в Android SDK свой WS-клиент
+    // появился только в API 34, а minSdk у нас 24.
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
 }

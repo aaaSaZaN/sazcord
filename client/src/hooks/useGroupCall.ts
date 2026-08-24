@@ -1593,6 +1593,7 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
         let totalBytesOut = 0;
         let proto: string | null = null;
         let codecName: string | null = null;
+        let bestPair: { report: any; localId: string | null; remoteId: string | null } | null = null;
 
         for (const pc of pcs) {
           if (pc.connectionState === 'closed') continue;
@@ -1601,7 +1602,14 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
             if (stat.type === 'candidate-pair' && (stat.nominated || stat.state === 'succeeded' || stat.selected)) {
               if (typeof stat.currentRoundTripTime === 'number') {
                 const rtt = Math.round(stat.currentRoundTripTime * 1000);
-                if (minPing === null || rtt < minPing) minPing = rtt;
+                if (minPing === null || rtt < minPing) {
+                  minPing = rtt;
+                  bestPair = {
+                    report,
+                    localId: typeof stat.localCandidateId === 'string' ? stat.localCandidateId : null,
+                    remoteId: typeof stat.remoteCandidateId === 'string' ? stat.remoteCandidateId : null,
+                  };
+                }
               }
             }
             if (stat.type === 'inbound-rtp' && stat.kind === 'audio') {
@@ -1638,6 +1646,17 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
           else quality = 'poor';
         }
 
+        // Адреса самой быстрой ICE-пары — как в useCall, для диагностики
+        // «почему такой пинг» прямо из бейджа.
+        const describeCandidate = (id: string | null): string | null => {
+          if (!id || !bestPair) return null;
+          const c: any = bestPair.report.get(id);
+          if (!c || !c.candidateType) return null;
+          const addr = c.address || c.ip || '?';
+          return `${c.candidateType} ${addr}${c.protocol ? `/${c.protocol}` : ''}`;
+        };
+        const best = bestPair as { localId: string | null; remoteId: string | null } | null;
+
         setStats({
           ping: minPing,
           packetLoss: lossPercent,
@@ -1646,6 +1665,8 @@ export function useGroupCall({ socket, selfUser, settings, toast, sounds }) {
           bitrateOutKbps: bitrateOut,
           codec: codecName || 'opus',
           protocol: proto,
+          routeLocal: describeCandidate(best?.localId ?? null),
+          routeRemote: describeCandidate(best?.remoteId ?? null),
         });
       } catch {
         /* ignore */

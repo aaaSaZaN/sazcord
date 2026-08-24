@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -56,6 +58,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "sazcord";
     private static final String KEY_SERVER = "serverUrl";
     private static final int REQ_PERMS = 1001;
+
+    /** Приложение сейчас на экране (см. onResume/onPause). */
+    public static volatile boolean activityVisible = false;
 
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
@@ -157,6 +162,16 @@ public class MainActivity extends AppCompatActivity {
         // из этого источника». Вернулся — доводим установку до конца, если
         // APK уже скачан. Без этого хука флоу обрывался навсегда.
         UpdateChecker.resumePendingInstall(this);
+        // Флаг для CallListenerService: пока приложение на экране, входящие
+        // звонки показывает веб-клиент (IncomingCallModal), нативное
+        // уведомление дублировало бы его.
+        activityVisible = true;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        activityVisible = false;
     }
 
     private void configureWebView() {
@@ -423,6 +438,51 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void setCallActive(boolean active) {
             runOnUiThread(() -> CallService.setActive(MainActivity.this, active));
+        }
+
+        /**
+         * Маршрут вывода звука звонка: громкая связь (true) или разговорный
+         * динамик (false). В WebView у WebRTC нет JS-апи на переключение —
+         * setSinkId не управляет communication-устройством Android.
+         */
+        @JavascriptInterface
+        public void setSpeakerphone(boolean on) {
+            runOnUiThread(() -> {
+                AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                if (am == null) return;
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        // API 31+: setSpeakerphoneOn deprecated, новый способ —
+                        // явный выбор communication-устройства.
+                        if (on) {
+                            for (AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
+                                if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                                    am.setCommunicationDevice(d);
+                                    break;
+                                }
+                            }
+                        } else {
+                            am.clearCommunicationDevice();
+                        }
+                    } else {
+                        am.setSpeakerphoneOn(on);
+                    }
+                } catch (Exception ignored) {
+                    // На некоторых прошивках AudioManager кидается — молча,
+                    // юзер просто останется на дефолтном маршруте.
+                }
+            });
+        }
+
+        /**
+         * Включить/выключить фонового наблюдателя входящих звонков.
+         * Адрес сервера берём из настроек обёртки — он совпадает с тем,
+         * откуда загружен WebView. Токен передаёт веб-клиент при логине.
+         */
+        @JavascriptInterface
+        public void setCallWatch(String token) {
+            final String t = token == null ? "" : token.trim();
+            runOnUiThread(() -> CallListenerService.setWatch(MainActivity.this, serverUrl(), t));
         }
 
         /** Ручная проверка обновлений (кнопка в настройках клиента). */

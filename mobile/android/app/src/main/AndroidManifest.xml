@@ -14,6 +14,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Полноэкранный запуск с входящим звонком на заблокированном экране.
+         Без разрешения система молча откатит к heads-up уведомлению. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Фоновый наблюдатель звонков (CallListenerService) держит постоянное
+         websocket-соединение с сервером — тип specialUse, т.к. ни microphone
+         (это не сам звонок), ни dataSync (лимит 6 часов в Android 15) не
+         описывают задачу «мессенджер без Google-push». -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Самообновление: скачиваем APK и отдаём его системному установщику. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -47,6 +56,16 @@
             android:name=".CallService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- Наблюдатель входящих звонков, пока приложение закрыто. -->
+        <service
+            android:name=".CallListenerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Self-hosted messenger without push provider keeps a persistent connection to show incoming call alerts" />
+        </service>
 
         <!-- Результат установки обновления от PackageInstaller. exported=false:
              адресуется только нашим PendingIntent'ом, снаружи звать нечего. -->

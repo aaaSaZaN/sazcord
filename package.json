@@ -1,6 +1,6 @@
 {
   "name": "sazcord",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "private": true,
   "type": "module",
   "description": "Self-hosted minimal messenger with voice/video calls and screen sharing",

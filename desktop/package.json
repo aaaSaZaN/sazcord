@@ -1,6 +1,6 @@
 {
   "name": "@sazcord/desktop",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "private": true,
   "description": "Sazcord desktop shell (Electron). Loads the Sazcord web client into a native window and adds OS-level features (global keybinds, tray, autostart).",
   "main": "main.js",

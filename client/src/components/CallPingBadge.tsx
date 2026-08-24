@@ -9,6 +9,9 @@ export type CallStats = {
   bitrateOutKbps?: number | null;
   codec?: string | null;
   protocol?: string | null;
+  /** Реальные адреса выбранного ICE-пары: «srflx 203.0.113.7/udp». */
+  routeLocal?: string | null;
+  routeRemote?: string | null;
 };
 
 type CallPingBadgeProps = {
@@ -108,6 +111,27 @@ export default function CallPingBadge({ stats, className = '' }: CallPingBadgePr
                 <span className="font-mono text-[11px]">
                   {stats.protocol === 'relay' ? 'TURN Relay' : 'Direct (P2P)'}
                 </span>
+              </div>
+            )}
+
+            {(stats?.routeLocal || stats?.routeRemote) && (
+              <div className="border-t border-white/10 pt-1.5 space-y-1">
+                {stats?.routeLocal && (
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-slate-400 shrink-0">Мой адрес:</span>
+                    <span className="font-mono text-[10px] break-all text-right">
+                      {stats.routeLocal}
+                    </span>
+                  </div>
+                )}
+                {stats?.routeRemote && (
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-slate-400 shrink-0">Адрес пира:</span>
+                    <span className="font-mono text-[10px] break-all text-right">
+                      {stats.routeRemote}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

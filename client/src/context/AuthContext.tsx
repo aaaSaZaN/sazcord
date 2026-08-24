@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, setAuthExpiredHandler } from '../api';
 import { connectSocket, disconnectSocket } from '../socket';
+import { setAndroidCallWatch } from '../utils/mobile';
 import { useToast } from './ToastContext';
 
 const AuthContext = createContext(null);
@@ -71,6 +72,10 @@ export function AuthProvider({ children }) {
 
   // Управляем жизненным циклом сокета
   useEffect(() => {
+    // Фоновый наблюдатель звонков в Android-обёртке живёт на нашем токене:
+    // логин — включаем, логаут/удаление аккаунта — выключаем. На вебе
+    // это no-op (моста нет), там входящие ловит service worker.
+    setAndroidCallWatch(auth?.token || null);
     if (auth?.token) {
       const sock = connectSocket(auth.token);
       setSocket(sock);

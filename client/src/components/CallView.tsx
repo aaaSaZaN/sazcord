@@ -24,6 +24,7 @@ import { canShareScreen } from '../utils/media';
 import { useSettings } from '../context/SettingsContext';
 import { formatDuration, getAvatarUrl, getDisplayName } from '../utils/user';
 import { applySinkId } from '../utils/audioSink';
+import { isAndroidShell, setAndroidSpeakerphone } from '../utils/mobile';
 import CallPingBadge from './CallPingBadge';
 
 const SettingsPanel = lazy(() => import('./SettingsPanel'));
@@ -136,6 +137,10 @@ export default function CallView({
   const [qualityOpen, setQualityOpen] = useState(false);
   const [streamVolumeMenu, setStreamVolumeMenu] = useState(null);
   const [, tick] = useState(0);
+  // Громкая связь актуальна только в Android-обёртке: там WebView выводит
+  // звук в разговорный динамик, и переключить его можно только нативно.
+  // Дефолт — включена: телефон обычно лежит рядом, а не у уха.
+  const [speakerOn, setSpeakerOn] = useState(() => (isAndroidShell() ? true : false));
   // Фуллскрин для удалённого стрима. Цепляемся к враппер-диву (а не к
   // самому <video>) — так пользователь видит всю плашку и оверлеи поверх,
   // а не голую видеокартинку без управления.
@@ -186,6 +191,18 @@ export default function CallView({
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
+
+  // При входе в звонок включаем громкую связь (Android), при выходе —
+  // возвращаем маршрутизацию системе.
+  useEffect(() => {
+    if (!isAndroidShell()) return undefined;
+    if (state === 'in-call' || state === 'connecting') {
+      setAndroidSpeakerphone(speakerOn);
+    } else {
+      setAndroidSpeakerphone(false);
+    }
+    return () => setAndroidSpeakerphone(false);
+  }, [state, speakerOn]);
 
   const toggleFullscreen = () => {
     const el = remoteWrapperRef.current;
@@ -411,6 +428,16 @@ export default function CallView({
         >
           {deafened ? <VolumeX size={20} /> : <Volume2 size={20} />}
         </ToolButton>
+        {isAndroidShell() && (
+          <ToolButton
+            onClick={() => setSpeakerOn((v) => !v)}
+            active={!speakerOn}
+            title={speakerOn ? 'Громкая связь: вкл (нажми — на разговорный)' : 'Разговорный динамик (нажми — на громкую связь)'}
+          >
+            {/* Иконка с перечёркиванием = разговорный динамик. */}
+            {speakerOn ? <Volume2 size={20} /> : <VolumeX size={20} />}
+          </ToolButton>
+        )}
         <ToolButton
           onClick={toggleCamera}
           active={cameraOn}
