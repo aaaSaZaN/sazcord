@@ -52,17 +52,37 @@ type RequestOptions = {
   token?: string | null;
 };
 
+// Таймаут на каждый HTTP-запрос. Без него «чёрная дыра» в сети (например,
+// кривой hairpin NAT, когда домен сервера резолвится в публичный IP,
+// недостижимый из локалки) подвешивает fetch на минуты: /api/me никогда
+// не отвечает — AuthContext навсегда ready=false — юзер смотрит на синий
+// экран «Загрузка…» без единого сообщения об ошибке.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 async function request<T>(
   path: string,
   { method = 'GET', body, token }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (ctrl.signal.aborted) {
+      throw new ApiError('Сервер не отвечает (таймаут)', 0);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   let data: unknown = null;
   try {
     data = await res.json();

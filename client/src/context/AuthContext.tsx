@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, setAuthExpiredHandler } from '../api';
+import { api, ApiError, setAuthExpiredHandler } from '../api';
 import { connectSocket, disconnectSocket } from '../socket';
 import { useToast } from './ToastContext';
 
@@ -48,10 +48,17 @@ export function AuthProvider({ children }) {
         const next = { token: stored.token, user };
         setAuth(next);
         writeStored(next);
-      } catch {
+      } catch (e) {
         if (!cancelled) {
-          setAuth(null);
-          writeStored(null);
+          // Сетевая ошибка/таймаут (status 0) — НЕ разлогиниваем: токен
+          // может быть валиден, просто сервер сейчас недостижен (обрыв,
+          // кривой hairpin NAT). Оставляем сохранённую сессию, иначе
+          // любой сбой сети выкидывал бы юзера на экран логина.
+          const networkish = e instanceof ApiError && e.status === 0;
+          if (!networkish) {
+            setAuth(null);
+            writeStored(null);
+          }
         }
       } finally {
         if (!cancelled) setReady(true);

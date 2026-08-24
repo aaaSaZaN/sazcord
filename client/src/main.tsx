@@ -11,6 +11,7 @@ import { ConfigProvider } from './context/ConfigContext';
 import { GroupsProvider } from './context/GroupsContext';
 import UpdateToast from './components/UpdateToast';
 import TitleBar from './components/TitleBar';
+import ErrorBoundary from './components/ErrorBoundary';
 import { attachNotificationClickHandler } from './utils/push';
 import { isDesktop } from './utils/desktop';
 import '@fontsource-variable/inter';
@@ -41,7 +42,13 @@ if ('serviceWorker' in navigator) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    {/* ErrorBoundary вокруг ВСЕГО дерева провайдеров: раньше он был только
+      внутри App (вокруг роутов), и любой синхронный бросок в провайдере
+      (Settings/Mutes/Groups при битом localStorage и т.п.) убивал весь
+      рендер до монтирования App — юзер навсегда оставался на пустом синем
+      фоне без кнопки «Перезагрузить». */}
+    <ErrorBoundary fallbackTitle="Ошибка инициализации приложения">
+      <BrowserRouter>
       <I18nProvider>
         <ToastProvider>
           <ConfigProvider>
@@ -63,5 +70,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </ToastProvider>
       </I18nProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

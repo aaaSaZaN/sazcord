@@ -168,6 +168,20 @@ function createWindow() {
   mainWindow.webContents.session.setPermissionCheckHandler(() => true);
   mainWindow.webContents.session.setDevicePermissionHandler(() => true);
 
+  // Автовосстановление после падения renderer-процесса (GPU-глюки драйвера,
+  // OOM на слабых машинах). Без этого окно остаётся «замороженным» на
+  // последнем кадре — визуально это и есть «завис на синем фоне», лечится
+  // только убийством процесса из диспетчера задач. Один авто-reload с
+  // защитой от шторма (не чаще раза в 10 секунд).
+  let lastCrashReload = 0;
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('renderer-process-gone:', details);
+    const now = Date.now();
+    if (now - lastCrashReload < 10_000) return;
+    lastCrashReload = now;
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.reload();
+  });
+
   // Скрываем стандартное меню (File/Edit/...) — у нас своё UI.
   Menu.setApplicationMenu(null);
 
