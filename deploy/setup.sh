@@ -366,16 +366,20 @@ fi
 
 # --- 8.5 TURN (опционально) ------------------------------------------
 # Свой coturn нужен, если у кого-то из пользователей звонки не соединяются:
-# строгий NAT, мобильный CGNAT, корпоративный firewall. По умолчанию
-# выключен — публичного STUN хватает большинству.
+# строгий NAT, мобильный CGNAT, корпоративный firewall. Публичный STUN
+# покрывает ~80% случаев, остальные 20% без TURN звонить не смогут.
 TURN_WANT="${SAZCORD_TURN:-}"
+TURN_DEFAULT=0
 if [[ -z "$TURN_WANT" && -z "$ASSUME_YES" ]]; then
   echo
-  echo "  Свой TURN-сервер помогает, если у кого-то звонки не соединяются"
-  echo "  (корпоративный NAT, мобильный интернет). Ставит Docker-контейнер"
-  echo "  coturn и открывает порты 3478/tcp+udp и 49152-65535/udp."
+  echo "  Лучше сделать: свой TURN-сервер. Без него у части пользователей"
+  echo "  (корпоративный NAT, мобильный интернет) звонки не соединятся."
+  echo "  Ставит Docker-контейнер coturn и открывает порты 3478/tcp+udp"
+  echo "  и 49152-65535/udp. Можно добавить потом:"
+  echo "  sudo bash $INSTALL_DIR/deploy/turn/install.sh"
+  TURN_DEFAULT=1
 fi
-ask TURN_WANT "Поднять coturn рядом с Sazcord? 1/0" "0"
+ask TURN_WANT "Поднять coturn рядом с Sazcord? (лучше сделать) 1/0" "$TURN_DEFAULT"
 if [[ "$TURN_WANT" == "1" ]]; then
   say "Ставлю TURN (deploy/turn/install.sh)"
   SAZCORD_DIR="$INSTALL_DIR" \
