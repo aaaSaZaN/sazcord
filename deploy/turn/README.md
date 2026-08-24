@@ -7,6 +7,26 @@ NAT, мобильный CGNAT, корпоративный firewall). На пуб
 
 ## Быстрый старт
 
+### Одной командой (рекомендуется)
+
+Скрипт сам поставит Docker, сгенерирует пароль, отрендерит конфиг,
+поднимет контейнер, откроет порты в ufw и пропишет TURN в `server/.env`:
+
+```bash
+sudo bash deploy/turn/install.sh
+```
+
+Неинтерактивно:
+
+```bash
+SAZCORD_HOST=chat.example.com SAZCORD_ASSUME_YES=1 \
+  sudo -E bash deploy/turn/install.sh
+```
+
+Повторный запуск обновляет конфиг и контейнер, пароль не меняет.
+
+### Вручную
+
 1. Убедись, что на сервере установлен Docker:
    ```bash
    curl -fsSL https://get.docker.com | sudo sh

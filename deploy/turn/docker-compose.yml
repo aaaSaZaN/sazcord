@@ -25,7 +25,10 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      # По умолчанию — шаблон рядом с compose (ручная установка).
+      # deploy/turn/install.sh рендерит готовый конфиг с секретами в
+      # /etc/sazcord-coturn/turnserver.conf и прописывает путь в .env.
+      - ${TURN_CONF:-./turnserver.conf}:/etc/coturn/turnserver.conf:ro
       # Если у тебя есть TLS-сертификаты (например, шариш с nginx через certbot) —
       # монтируй сюда и укажи пути в turnserver.conf (см. cert=/pkey=).
       # - /etc/letsencrypt:/etc/letsencrypt:ro

@@ -268,7 +268,12 @@ VAPID_SUBJECT=mailto:admin@example.com
 оператором с CGNAT, голос/видео могут не подключиться (ICE не находит
 прямой путь между пирами). Помогает свой TURN-сервер.
 
-**Самый быстрый способ - docker-compose**: готовый шаблон лежит в
+**Самый быстрый способ - автоматом**: `sudo bash deploy/turn/install.sh`.
+Скрипт поставит Docker, сгенерирует пароль, поднимет контейнер, откроет
+порты в ufw и пропишет TURN в `server/.env`. Неинтерактивно:
+`SAZCORD_HOST=chat.example.com SAZCORD_ASSUME_YES=1 sudo -E bash deploy/turn/install.sh`.
+
+**Или руками через docker-compose**: готовый шаблон лежит в
 `deploy/turn/`, см. `deploy/turn/README.md`. Нужно только задать свой
 пароль и публичный IP, потом `docker compose up -d`.
 
