@@ -131,14 +131,18 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
             </aside>
 
             {/* Content */}
-            <div className="flex-1 min-w-0 flex flex-col">
+            {/* min-h-0 обязателен на обоих flex-детях: в колонке flex-item
+                без него не сжимается ниже контента (min-height:auto),
+                контейнер с overflow-hidden обрезает хвост — и на телефоне
+                настройки невозможно прокрутить. */}
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col">
               <div className="flex items-center justify-between px-5 py-3 border-b border-border">
                 <div className="text-base font-semibold">{t(`settings.tab.${tab}`)}</div>
                 <button className="btn-ghost" onClick={onClose} title={t('common.close')}>
                   <X size={18} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-5">
+              <div className="flex-1 min-h-0 overflow-y-auto p-5">
                 {tab === 'profile' && <ProfileTab />}
                 {tab === 'password' && <PasswordTab />}
                 {tab === 'audio' && <AudioTab />}
